@@ -366,26 +366,170 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                 </div>
               </div>
 
-              {/* Detailed Explanations */}
-              <div className="mt-4 space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <details className="group">
-                  <summary className="cursor-pointer text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
-                    📊 View Detailed Metrics
-                  </summary>
-                  <div className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-400 pl-4">
-                    <p><strong className="text-blue-600 dark:text-blue-400">Growth:</strong> {data.scoreBreakdown.details.growth}</p>
-                    <p><strong className="text-green-600 dark:text-green-400">Profitability:</strong> {data.scoreBreakdown.details.profitability}</p>
-                    <p><strong className="text-purple-600 dark:text-purple-400">Valuation:</strong> {data.scoreBreakdown.details.valuation}</p>
-                    <p><strong className="text-orange-600 dark:text-orange-400">Momentum:</strong> {data.scoreBreakdown.details.momentum}</p>
-                    <p><strong className="text-indigo-600 dark:text-indigo-400">Analyst:</strong> {data.scoreBreakdown.details.analyst}</p>
-                  </div>
-                </details>
-              </div>
-
-              <p className="text-xs text-gray-500 dark:text-gray-400 pt-2 italic">
+              <p className="text-xs text-gray-500 dark:text-gray-400 pt-2 italic mt-4">
                 * Context-aware scoring using relative analysis vs industry peers. Scores reflect percentile rankings, not absolute thresholds.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Detailed Metrics Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            📊 Detailed Metrics Breakdown
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            Deep dive into the components that make up the FactorFive Score. Each metric is analyzed relative to industry peers.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Growth Metrics */}
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-5 border border-blue-200 dark:border-blue-700">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                  {data.scoreBreakdown.growthScore}
+                </div>
+                <div>
+                  <h3 className="font-bold text-blue-700 dark:text-blue-300 text-sm">Growth</h3>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">Score: {data.scoreBreakdown.growthScore}/20</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                {data.scoreBreakdown.details.growth}
+              </p>
+              <div className="mt-3 pt-3 border-t border-blue-300 dark:border-blue-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-blue-600 dark:text-blue-400 font-medium">Industry Percentile</span>
+                  <span className="font-bold text-blue-700 dark:text-blue-300">{data.scoreBreakdown.peerContext.percentileRanks.growth}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Profitability Metrics */}
+            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-5 border border-green-200 dark:border-green-700">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-full bg-green-500 dark:bg-green-600 flex items-center justify-center text-white font-bold text-lg">
+                  {data.scoreBreakdown.profitabilityScore}
+                </div>
+                <div>
+                  <h3 className="font-bold text-green-700 dark:text-green-300 text-sm">Profitability</h3>
+                  <p className="text-xs text-green-600 dark:text-green-400">Score: {data.scoreBreakdown.profitabilityScore}/20</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                {data.scoreBreakdown.details.profitability}
+              </p>
+              <div className="mt-3 pt-3 border-t border-green-300 dark:border-green-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-green-600 dark:text-green-400 font-medium">Industry Percentile</span>
+                  <span className="font-bold text-green-700 dark:text-green-300">{data.scoreBreakdown.peerContext.percentileRanks.profitability}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Valuation Metrics */}
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-5 border border-purple-200 dark:border-purple-700">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-full bg-purple-500 dark:bg-purple-600 flex items-center justify-center text-white font-bold text-lg">
+                  {data.scoreBreakdown.valuationScore}
+                </div>
+                <div>
+                  <h3 className="font-bold text-purple-700 dark:text-purple-300 text-sm">Valuation</h3>
+                  <p className="text-xs text-purple-600 dark:text-purple-400">Score: {data.scoreBreakdown.valuationScore}/20</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                {data.scoreBreakdown.details.valuation}
+              </p>
+              <div className="mt-3 pt-3 border-t border-purple-300 dark:border-purple-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-purple-600 dark:text-purple-400 font-medium">Industry Percentile</span>
+                  <span className="font-bold text-purple-700 dark:text-purple-300">{data.scoreBreakdown.peerContext.percentileRanks.valuation}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Momentum Metrics */}
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-5 border border-orange-200 dark:border-orange-700">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-full bg-orange-500 dark:bg-orange-600 flex items-center justify-center text-white font-bold text-lg">
+                  {data.scoreBreakdown.momentumScore}
+                </div>
+                <div>
+                  <h3 className="font-bold text-orange-700 dark:text-orange-300 text-sm">Momentum</h3>
+                  <p className="text-xs text-orange-600 dark:text-orange-400">Score: {data.scoreBreakdown.momentumScore}/20</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                {data.scoreBreakdown.details.momentum}
+              </p>
+              <div className="mt-3 pt-3 border-t border-orange-300 dark:border-orange-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-orange-600 dark:text-orange-400 font-medium">Industry Percentile</span>
+                  <span className="font-bold text-orange-700 dark:text-orange-300">{data.scoreBreakdown.peerContext.percentileRanks.momentum}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Analyst Metrics */}
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg p-5 border border-indigo-200 dark:border-indigo-700">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-full bg-indigo-500 dark:bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
+                  {data.scoreBreakdown.analystScore}
+                </div>
+                <div>
+                  <h3 className="font-bold text-indigo-700 dark:text-indigo-300 text-sm">Analyst Ratings</h3>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400">Score: {data.scoreBreakdown.analystScore}/20</p>
+                </div>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                {data.scoreBreakdown.details.analyst}
+              </p>
+              <div className="mt-3 pt-3 border-t border-indigo-300 dark:border-indigo-700">
+                <div className="flex justify-between text-xs">
+                  <span className="text-indigo-600 dark:text-indigo-400 font-medium">Industry Percentile</span>
+                  <span className="font-bold text-indigo-700 dark:text-indigo-300">{data.scoreBreakdown.peerContext.percentileRanks.analyst}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Peer Comparison Summary */}
+            <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-700/20 dark:to-gray-600/20 rounded-lg p-5 border border-gray-200 dark:border-gray-600">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-10 h-10 rounded-full bg-gray-500 dark:bg-gray-600 flex items-center justify-center text-white font-bold text-lg">
+                  📊
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-700 dark:text-gray-300 text-sm">Peer Context</h3>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">Industry Analysis</p>
+                </div>
+              </div>
+              <div className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                <div className="flex justify-between">
+                  <span>Industry:</span>
+                  <span className="font-semibold">{data.scoreBreakdown.peerContext.industry}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Peer Companies:</span>
+                  <span className="font-semibold">{data.scoreBreakdown.peerContext.peerCount}</span>
+                </div>
+                <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
+                  <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                    Scores are calculated using z-score normalization against {data.scoreBreakdown.peerContext.peerCount} peer companies in the {data.scoreBreakdown.peerContext.industry} sector. Higher percentiles indicate better performance relative to peers.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Methodology Note */}
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+            <h4 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-2">📚 Methodology</h4>
+            <p className="text-xs text-blue-800 dark:text-blue-400 leading-relaxed">
+              The FactorFive Score uses a sophisticated multi-factor analysis comparing {data.symbol} against {data.scoreBreakdown.peerContext.peerCount} industry peers. 
+              Each component is normalized using statistical z-scores to ensure fair comparison regardless of company size or industry dynamics. 
+              Percentile rankings show where the company stands relative to its peer group (e.g., 75th percentile means better than 75% of peers).
+            </p>
           </div>
         </div>
 
