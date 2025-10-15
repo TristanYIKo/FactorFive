@@ -147,12 +147,68 @@ The app includes comprehensive error handling:
 
 All API responses are fully typed using TypeScript interfaces defined in `types/stock.ts`.
 
-## Deploy on Vercel
+## 🚀 Deploy on Vercel
 
-1. Push your code to GitHub
-2. Import the project in Vercel
-3. Add your `FINNHUB_KEY` environment variable in Vercel settings
-4. Deploy
+This project is **vercel-ready** with zero-config deployment!
+
+### Quick Deploy (3 Steps)
+
+1. **Push to GitHub**
+   ```bash
+   git push origin main
+   ```
+
+2. **Import to Vercel**
+   - Go to [vercel.com](https://vercel.com)
+   - Click "Add New Project"
+   - Import your GitHub repository
+   - Framework auto-detected: Next.js ✅
+
+3. **Add Environment Variables**
+   
+   In Vercel Dashboard → Settings → Environment Variables:
+   
+   | Variable | Value | Scope |
+   |----------|-------|-------|
+   | `FINNHUB_KEY` | Your Finnhub API key | Production, Preview, Development |
+   | `NEWS_API_KEY` | Your NewsAPI key | Production, Preview, Development |
+
+4. **Deploy & Verify**
+   
+   After deployment, test the health endpoint:
+   ```bash
+   curl https://your-app.vercel.app/api/health
+   ```
+   
+   Expected response:
+   ```json
+   {
+     "ok": true,
+     "env": {
+       "hasNewsApiKey": true,
+       "hasFinnhubKey": true
+     }
+   }
+   ```
+
+### 📚 Detailed Documentation
+
+For comprehensive deployment instructions, troubleshooting, and testing:
+
+- **[DEPLOY_TO_VERCEL.md](./DEPLOY_TO_VERCEL.md)** - Complete deployment guide with troubleshooting
+- **[DEPLOYMENT_PR_SUMMARY.md](./DEPLOYMENT_PR_SUMMARY.md)** - Summary of all deployment changes
+- **[VERCEL_DEPLOYMENT_SUMMARY.md](./VERCEL_DEPLOYMENT_SUMMARY.md)** - Technical deployment checklist
+
+### ✅ Production Readiness
+
+This project includes:
+- ✅ Runtime configuration for Vercel serverless functions
+- ✅ Environment variable validation via `/api/health`
+- ✅ Base URL auto-detection for local dev vs production
+- ✅ Smoke test suite (`npm run test:smoke`)
+- ✅ No hardcoded URLs (all relative paths)
+- ✅ Comprehensive error handling
+- ✅ TypeScript type safety
 
 The app will automatically use Vercel's edge network for fast global delivery.
 
