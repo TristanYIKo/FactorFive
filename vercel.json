@@ -1,8 +1,4 @@
 {
   "buildCommand": "npm run build",
-  "framework": "nextjs",
-  "env": {
-    "FINNHUB_KEY": "@finnhub_key",
-    "NEWS_API_KEY": "@news_api_key"
-  }
+  "framework": "nextjs"
 }
