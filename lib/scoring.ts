@@ -44,16 +44,34 @@ function calculatePercentile(value: number, values: number[]): number {
 }
 
 /**
- * Convert z-score to a 0-20 point score
- * Z-score of 0 (average) = 10 points
- * Z-score of +2 (2 std devs above) = 20 points
- * Z-score of -2 (2 std devs below) = 0 points
+ * Convert z-score to a 0-20 point score using NON-LINEAR transformation
+ * 
+ * This creates better separation between companies:
+ * - Z-score of -2 (2 std devs below) = 0-2 points (poor performers get penalized heavily)
+ * - Z-score of -1 (1 std dev below) = 4-6 points (below average)
+ * - Z-score of 0 (average) = 10 points (neutral baseline)
+ * - Z-score of +1 (1 std dev above) = 14-16 points (above average gets rewarded)
+ * - Z-score of +2 (2 std devs above) = 18-20 points (excellent performers get top scores)
+ * 
+ * Uses sigmoid-like exponential curve to amplify differences at the extremes
  */
 function zScoreToPoints(zScore: number, maxPoints: number = 20): number {
-  // Map z-score from [-2, +2] to [0, maxPoints]
-  // Clamp to ensure we stay within bounds
-  const normalized = (zScore + 2) / 4; // Maps [-2,2] to [0,1]
-  const points = normalized * maxPoints;
+  // Clamp z-score to reasonable bounds
+  const clampedZ = Math.max(-3, Math.min(3, zScore));
+  
+  // Apply exponential transformation for better separation
+  // Formula: points = maxPoints * (1 / (1 + e^(-1.5 * z)))
+  // This is a sigmoid function centered at z=0, scaled for maxPoints
+  
+  const steepness = 1.5; // Controls how aggressive the curve is (higher = more separation)
+  const sigmoid = 1 / (1 + Math.exp(-steepness * clampedZ));
+  
+  // Sigmoid outputs 0.5 at z=0 (average), we want this to be 10 points (middle)
+  // Sigmoid outputs ~0.95 at z=+2, we want this to be close to 20 points
+  // Sigmoid outputs ~0.05 at z=-2, we want this to be close to 0 points
+  
+  const points = sigmoid * maxPoints;
+  
   return Math.max(0, Math.min(maxPoints, points));
 }
 
@@ -311,65 +329,80 @@ function calculateValuationScore(
   // Calculate relative valuation (how much above/below industry)
   const peRatio = pe / avgPe; // 1.0 = at average, 1.2 = 20% premium, 0.8 = 20% discount
   
-  // Score P/E with nuanced approach (12 points max)
+  // Score P/E with AGGRESSIVE non-linear approach (12 points max)
+  // Heavily rewards undervaluation, severely penalizes overvaluation
   let peScore = 0;
   
-  if (peRatio <= 0.7) {
-    // 30%+ discount to industry = excellent value
+  if (peRatio <= 0.6) {
+    // 40%+ discount to industry = exceptional value
     peScore = 12;
+  } else if (peRatio <= 0.75) {
+    // 25-40% discount = excellent value
+    peScore = 11.5;
   } else if (peRatio <= 0.85) {
-    // 15-30% discount = very good value
-    peScore = 11;
+    // 15-25% discount = very good value
+    peScore = 10.5;
   } else if (peRatio <= 0.95) {
     // 5-15% discount = good value
-    peScore = 10;
+    peScore = 9.5;
   } else if (peRatio <= 1.05) {
     // Within 5% of industry average = fair/neutral
-    peScore = 9;
+    peScore = 8;
   } else if (peRatio <= 1.15) {
     // 5-15% premium = acceptable if justified
-    peScore = 8;
+    peScore = 6.5;
   } else if (peRatio <= 1.30) {
-    // 15-30% premium = slight concern
-    peScore = 6;
+    // 15-30% premium = concerning
+    peScore = 4.5;
   } else if (peRatio <= 1.50) {
     // 30-50% premium = expensive
-    peScore = 4;
+    peScore = 3;
+  } else if (peRatio <= 2.0) {
+    // 50-100% premium = very expensive
+    peScore = 1.5;
   } else {
-    // 50%+ premium = very expensive
-    peScore = 2;
+    // 100%+ premium = extremely overvalued
+    peScore = 0.5;
   }
 
-  // PEG Ratio Adjustment (can add up to 4 points or subtract 2)
+  // PEG Ratio Adjustment (can add up to 5 points or subtract up to 4)
   // PEG < 1 means P/E is justified by growth (good value)
   // PEG > 2 means expensive even accounting for growth
   let pegAdjustment = 0;
   if (peg && peg > 0) {
-    if (peg < 0.8) {
-      pegAdjustment = 4; // Excellent - growth at steep discount
+    if (peg < 0.5) {
+      pegAdjustment = 5; // Exceptional - growth at steep discount
+    } else if (peg < 0.8) {
+      pegAdjustment = 4; // Excellent - growth at discount
     } else if (peg < 1.0) {
-      pegAdjustment = 3; // Great - reasonable price for growth
-    } else if (peg < 1.5) {
+      pegAdjustment = 2.5; // Great - reasonable price for growth
+    } else if (peg < 1.3) {
       pegAdjustment = 1; // Fair - growth justifies some premium
-    } else if (peg > 2.5) {
+    } else if (peg < 1.8) {
+      pegAdjustment = -0.5; // Slightly expensive for growth
+    } else if (peg < 2.5) {
       pegAdjustment = -2; // Expensive even with growth
+    } else {
+      pegAdjustment = -4; // Very expensive relative to growth
     }
   }
 
   peScore = Math.max(0, Math.min(12, peScore + pegAdjustment));
 
-  // Score P/B (8 points max) - simpler, industry-relative
-  let pbScore = 6; // Default neutral
+  // Score P/B (8 points max) - aggressive industry-relative scoring
+  let pbScore = 4; // Default neutral (reduced from 6)
   if (pb > 0 && peerPb.length >= 3) {
     const avgPb = benchmarks.avgPb;
     const pbRatio = pb / avgPb;
     
-    if (pbRatio <= 0.7) pbScore = 8;
-    else if (pbRatio <= 0.85) pbScore = 7;
-    else if (pbRatio <= 1.0) pbScore = 6;
-    else if (pbRatio <= 1.2) pbScore = 5;
-    else if (pbRatio <= 1.5) pbScore = 4;
-    else pbScore = 3;
+    if (pbRatio <= 0.6) pbScore = 8; // Deep discount
+    else if (pbRatio <= 0.75) pbScore = 7.5; // Strong discount
+    else if (pbRatio <= 0.9) pbScore = 6.5; // Good discount
+    else if (pbRatio <= 1.0) pbScore = 5; // Slight discount
+    else if (pbRatio <= 1.15) pbScore = 3.5; // Slight premium
+    else if (pbRatio <= 1.35) pbScore = 2; // Moderate premium
+    else if (pbRatio <= 1.6) pbScore = 1; // High premium
+    else pbScore = 0.5; // Very high premium
   }
 
   const totalScore = Math.round(peScore + pbScore);
@@ -438,11 +471,23 @@ function calculateMomentumScore(
   // Calculate z-score for daily momentum
   const momentumZScore = calculateZScore(dailyChange, avgMomentum, stdDevMomentum || 2);
 
-  // Daily momentum: 10 points
+  // Daily momentum: 10 points (using non-linear z-score transformation)
   const dailyPoints = zScoreToPoints(momentumZScore, 10);
 
-  // 52-week position: 10 points (linear scale, higher position = more points)
-  const position52Points = (position52Week / 100) * 10;
+  // 52-week position: 10 points (NON-LINEAR - rewards stocks near highs more)
+  // Use exponential curve: stocks at 90%+ of 52W high get disproportionate rewards
+  let position52Points = 0;
+  if (position52Week >= 90) {
+    position52Points = 9 + (position52Week - 90) * 0.1; // 9-10 points for 90-100%
+  } else if (position52Week >= 75) {
+    position52Points = 7 + (position52Week - 75) * 0.133; // 7-9 points for 75-90%
+  } else if (position52Week >= 50) {
+    position52Points = 4 + (position52Week - 50) * 0.12; // 4-7 points for 50-75%
+  } else if (position52Week >= 25) {
+    position52Points = 2 + (position52Week - 25) * 0.08; // 2-4 points for 25-50%
+  } else {
+    position52Points = (position52Week / 25) * 2; // 0-2 points for 0-25%
+  }
 
   const totalScore = Math.round(dailyPoints + position52Points);
 
@@ -481,19 +526,35 @@ function calculateAnalystScore(
       const bullishPct = ((latest.strongBuy + latest.buy) / total) * 100;
       const bearishPct = ((latest.sell + latest.strongSell) / total) * 100;
 
-      // Map bullish percentage to 0-15 points
-      const recPoints = (bullishPct / 100) * 15;
+      // Map bullish percentage to 0-15 points with NON-LINEAR curve
+      // Rewards strong consensus (>80%) and penalizes bearish consensus (<30%)
+      let recPoints = 0;
+      if (bullishPct >= 85) {
+        recPoints = 14 + (bullishPct - 85) / 15; // 14-15 points for 85-100%
+      } else if (bullishPct >= 70) {
+        recPoints = 11 + (bullishPct - 70) / 5; // 11-14 points for 70-85%
+      } else if (bullishPct >= 55) {
+        recPoints = 8 + (bullishPct - 55) / 5; // 8-11 points for 55-70%
+      } else if (bullishPct >= 40) {
+        recPoints = 5 + (bullishPct - 40) / 5; // 5-8 points for 40-55%
+      } else if (bullishPct >= 25) {
+        recPoints = 2.5 + (bullishPct - 25) / 6; // 2.5-5 points for 25-40%
+      } else {
+        recPoints = (bullishPct / 25) * 2.5; // 0-2.5 points for 0-25%
+      }
 
-      // Price target upside (0-5 points)
-      let targetPoints = 2.5; // Default neutral
+      // Price target upside (0-5 points) - MORE AGGRESSIVE
+      let targetPoints = 1; // Default neutral (reduced from 2.5)
       if (priceTarget?.targetMean) {
         const upside = ((priceTarget.targetMean - quote.c) / quote.c) * 100;
         
-        if (upside > 20) targetPoints = 5;
-        else if (upside > 10) targetPoints = 4;
-        else if (upside > 0) targetPoints = 3;
-        else if (upside > -10) targetPoints = 2;
-        else targetPoints = 0;
+        if (upside > 30) targetPoints = 5; // Huge upside
+        else if (upside > 20) targetPoints = 4.5; // Large upside
+        else if (upside > 10) targetPoints = 3.5; // Good upside
+        else if (upside > 5) targetPoints = 2.5; // Modest upside
+        else if (upside > 0) targetPoints = 1.5; // Small upside
+        else if (upside > -5) targetPoints = 0.5; // Small downside
+        else targetPoints = 0; // Downside risk
 
         detail = `${bullishPct.toFixed(0)}% bullish (${latest.strongBuy + latest.buy}/${total}), ${upside.toFixed(1)}% to target`;
       } else {
