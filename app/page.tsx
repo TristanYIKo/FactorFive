@@ -2,12 +2,14 @@
 
 import { useState, FormEvent, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import MarketCalendar from '@/components/MarketCalendar';
 
 /**
  * FactorFive - Home Page
  * 
- * Landing page with a ticker input that navigates to /ticker/[symbol]
- * User enters a stock symbol (e.g., AAPL, TSLA, MSFT) and submits
+ * Landing page with tabs:
+ * - Stock Analysis: Ticker input for stock analysis
+ * - Market Calendar: Shows upcoming economic events and key dates
  */
 // Popular and recommended tickers grouped by category
 const RECOMMENDED_TICKERS = {
@@ -23,6 +25,7 @@ const RECOMMENDED_TICKERS = {
 
 export default function Home() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<'search' | 'calendar'>('search');
   const [ticker, setTicker] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [filteredTickers, setFilteredTickers] = useState<Array<{ symbol: string; category: string }>>([]);
@@ -83,13 +86,13 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="text-center mb-12">
-          <h1 className="text-6xl font-bold text-gray-900 dark:text-white mb-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 sm:p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 dark:text-white mb-4">
             FactorFive
           </h1>
-                    <p className="text-xl text-gray-600 dark:text-gray-300">
+          <p className="text-xl text-gray-600 dark:text-gray-300">
             The intelligent 5-factor stock analysis engine
           </p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
@@ -97,7 +100,36 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 sm:p-12">
+        {/* Tab Navigation */}
+        <div className="flex justify-center mb-6">
+          <div className="inline-flex gap-2 bg-white dark:bg-gray-800 rounded-xl p-2 shadow-lg">
+            <button
+              onClick={() => setActiveTab('search')}
+              className={`px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'search'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              🔍 Stock Analysis
+            </button>
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className={`px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                activeTab === 'calendar'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              📅 Market Calendar
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'search' ? (
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 sm:p-12">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="relative">
               <label 
@@ -182,6 +214,13 @@ export default function Home() {
             upcoming earnings, and latest news from the past 14 days
           </p>
         </div>
+      </div>
+        ) : (
+          /* Market Calendar Tab */
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8">
+            <MarketCalendar />
+          </div>
+        )}
       </div>
     </div>
   );
