@@ -16,19 +16,11 @@ Stock Score lets you instantly analyze any stock by entering its ticker symbol (
 
 FactorFive provides institutional-grade stock analysis using a proprietary 5-factor model that evaluates companies across multiple dimensions:You’ll see key data pulled in real-time from the Finnhub API, including:
 
+Live Price & Daily Change
 
+Company Information (name, logo, market cap, industry)
 
-### The 5 FactorsLive Price & Daily Change
-
-1. **📈 Growth** - Revenue growth, earnings growth, and expansion trajectory
-
-2. **💰 Profitability** - Operating margins, net margins, ROE, and ROACompany Information (name, logo, market cap, industry)
-
-3. **💵 Valuation** - P/E ratio, P/B ratio, and relative market pricing
-
-4. **⚖️ Quality** - Balance sheet strength, earnings stability, cash flow, and capital efficiencyUpcoming Earnings Dates
-
-5. **🎯 Analyst Consensus** - Professional recommendations and price targets
+Upcoming Earnings Dates
 
 Recent News Headlines
 
