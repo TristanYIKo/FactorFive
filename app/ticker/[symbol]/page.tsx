@@ -466,7 +466,7 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                 </div>
                 <div>
                   <h3 className="font-bold text-cyan-700 dark:text-cyan-300 text-sm">🏆 Quality</h3>
-                  <p className="text-xs text-cyan-600 dark:text-cyan-400">Balance Sheet & Stability</p>
+                  <p className="text-xs text-cyan-600 dark:text-cyan-400">Financial Strength & Efficiency</p>
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -478,8 +478,15 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                   <span className="font-bold text-cyan-700 dark:text-cyan-300">{data.scoreBreakdown.peerContext.percentileRanks.quality}%</span>
                 </div>
               </div>
-              <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
-                <strong>Quality Analysis:</strong> Evaluates balance-sheet health through debt/equity ratios, current ratio (liquidity), and ROA. Lower debt and higher liquidity indicate stronger financial stability and lower risk.
+              <div className="absolute bottom-full left-0 mb-2 w-72 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
+                <strong>Quality Analysis (4 Components):</strong>
+                <div className="mt-2 space-y-1">
+                  <div>• <strong>Balance Sheet Strength:</strong> D/E ratio, liquidity, financial leverage</div>
+                  <div>• <strong>Earnings Stability:</strong> Consistency and volatility of profits</div>
+                  <div>• <strong>Cash Flow Quality:</strong> Operating margins as proxy for cash generation</div>
+                  <div>• <strong>Capital Efficiency:</strong> ROE/ROIC and ROA performance</div>
+                </div>
+                <div className="mt-2 text-[10px] text-gray-400 italic">Measures financial strength, earnings consistency, and capital efficiency relative to peers.</div>
               </div>
             </div>
 
