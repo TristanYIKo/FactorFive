@@ -27,25 +27,8 @@ Type in a stock ticker (for example, AAPL, TSLA, MSFT)
 Press Enter or click Analyze Stock
 
 Instantly view:
+- The company’s profile and current performance
+- Latest news articles
+- Upcoming earnings events
+- A visual Stock Score showing overall momentum
 
-The company’s profile and current performance
-
-Latest news articles
-
-Upcoming earnings events
-
-A visual Stock Score showing overall momentum
-
-Example Tickers
-
-Try any of these:
-
-AAPL – Apple Inc.
-
-TSLA – Tesla Inc.
-
-MSFT – Microsoft Corp.
-
-AMZN – Amazon.com Inc.
-
-NVDA – NVIDIA Corp.
