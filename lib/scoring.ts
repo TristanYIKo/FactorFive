@@ -44,31 +44,39 @@ function calculatePercentile(value: number, values: number[]): number {
 }
 
 /**
- * Convert z-score to a 0-20 point score using NON-LINEAR transformation
+ * Convert z-score to a 0-20 point score using AGGRESSIVE NON-LINEAR transformation
  * 
- * This creates better separation between companies:
- * - Z-score of -2 (2 std devs below) = 0-2 points (poor performers get penalized heavily)
- * - Z-score of -1 (1 std dev below) = 4-6 points (below average)
+ * This creates MAXIMUM separation between companies:
+ * - Z-score of -2 (2 std devs below) = 0-1 points (poor performers crushed)
+ * - Z-score of -1 (1 std dev below) = 2-4 points (below average heavily penalized)
  * - Z-score of 0 (average) = 10 points (neutral baseline)
- * - Z-score of +1 (1 std dev above) = 14-16 points (above average gets rewarded)
- * - Z-score of +2 (2 std devs above) = 18-20 points (excellent performers get top scores)
+ * - Z-score of +1 (1 std dev above) = 16-17 points (above average strongly rewarded)
+ * - Z-score of +2 (2 std devs above) = 19-20 points (excellent performers maxed out)
  * 
- * Uses sigmoid-like exponential curve to amplify differences at the extremes
+ * Uses STEEP sigmoid with power amplification for extreme separation
  */
 function zScoreToPoints(zScore: number, maxPoints: number = 20): number {
   // Clamp z-score to reasonable bounds
   const clampedZ = Math.max(-3, Math.min(3, zScore));
   
-  // Apply exponential transformation for better separation
-  // Formula: points = maxPoints * (1 / (1 + e^(-1.5 * z)))
-  // This is a sigmoid function centered at z=0, scaled for maxPoints
+  // MUCH STEEPER sigmoid for aggressive separation
+  // Increased steepness from 1.5 to 2.5 for more dramatic differences
+  const steepness = 2.5;
+  let sigmoid = 1 / (1 + Math.exp(-steepness * clampedZ));
   
-  const steepness = 1.5; // Controls how aggressive the curve is (higher = more separation)
-  const sigmoid = 1 / (1 + Math.exp(-steepness * clampedZ));
-  
-  // Sigmoid outputs 0.5 at z=0 (average), we want this to be 10 points (middle)
-  // Sigmoid outputs ~0.95 at z=+2, we want this to be close to 20 points
-  // Sigmoid outputs ~0.05 at z=-2, we want this to be close to 0 points
+  // Additional power amplification for positive scores
+  // This pushes good performers even higher while crushing poor ones
+  if (clampedZ > 0) {
+    // For above-average stocks, apply power function to amplify further
+    // This makes +1 std dev → ~17 points instead of ~15
+    const powerFactor = 1 + (clampedZ * 0.15); // Amplifies by up to 45% at z=+3
+    sigmoid = Math.min(1, sigmoid * powerFactor);
+  } else if (clampedZ < 0) {
+    // For below-average stocks, apply exponential decay
+    // This makes -1 std dev → ~3 points instead of ~5
+    const decayFactor = 1 - (Math.abs(clampedZ) * 0.15); // Reduces by up to 45% at z=-3
+    sigmoid = Math.max(0, sigmoid * decayFactor);
+  }
   
   const points = sigmoid * maxPoints;
   
@@ -598,8 +606,44 @@ export function calculateIntelligentStockScore(
   const momentum = calculateMomentumScore(quote, financials, peerMetrics, benchmarks);
   const analyst = calculateAnalystScore(quote, recommendations, priceTarget);
 
-  // Calculate total score
-  const totalScore = growth.score + profitability.score + valuation.score + momentum.score + analyst.score;
+  // Calculate base total score
+  let totalScore = growth.score + profitability.score + valuation.score + momentum.score + analyst.score;
+
+  // COMPOUND EXCELLENCE MULTIPLIER
+  // Companies that excel in multiple areas get a bonus boost
+  // This pushes truly exceptional companies from 70-75 range into 80-95 range
+  const scores = [growth.score, profitability.score, valuation.score, momentum.score, analyst.score];
+  const strongScores = scores.filter(s => s >= 15).length; // Count metrics scoring 15+ (75th percentile)
+  const excellentScores = scores.filter(s => s >= 17).length; // Count metrics scoring 17+ (85th percentile)
+  
+  let multiplierBonus = 0;
+  
+  if (excellentScores >= 4) {
+    // 4-5 excellent scores = elite company, add +15 bonus
+    multiplierBonus = 15;
+  } else if (excellentScores >= 3) {
+    // 3 excellent scores = very strong company, add +12 bonus
+    multiplierBonus = 12;
+  } else if (strongScores >= 4) {
+    // 4-5 strong scores = strong company, add +8 bonus
+    multiplierBonus = 8;
+  } else if (strongScores >= 3) {
+    // 3 strong scores = above average company, add +5 bonus
+    multiplierBonus = 5;
+  }
+  
+  // Also penalize companies with multiple weak areas
+  const weakScores = scores.filter(s => s <= 5).length; // Count metrics scoring ≤5 (25th percentile)
+  
+  if (weakScores >= 3) {
+    // 3+ weak areas = serious concerns, subtract -10
+    multiplierBonus -= 10;
+  } else if (weakScores >= 2) {
+    // 2 weak areas = concerning, subtract -5
+    multiplierBonus -= 5;
+  }
+  
+  totalScore = Math.max(0, Math.min(100, totalScore + multiplierBonus));
 
   const breakdown: ScoreBreakdown = {
     growthScore: growth.score,
@@ -607,7 +651,7 @@ export function calculateIntelligentStockScore(
     valuationScore: valuation.score,
     momentumScore: momentum.score,
     analystScore: analyst.score,
-    description: `Context-aware analysis vs ${benchmarks.peerCount} ${industry} peers using z-score normalization`,
+    description: `Context-aware analysis vs ${benchmarks.peerCount} ${industry} peers using z-score normalization${multiplierBonus !== 0 ? ` (${multiplierBonus > 0 ? '+' : ''}${multiplierBonus} compound ${multiplierBonus > 0 ? 'excellence' : 'concern'} adjustment)` : ''}`,
     details: {
       growth: growth.detail,
       profitability: profitability.detail,

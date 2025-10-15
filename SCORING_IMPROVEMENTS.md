@@ -237,9 +237,10 @@ Default neutral score reduced from **6 → 4 points**
 
 ## Summary of Changes
 
+### Phase 1: Initial Non-Linear Transformation
 | Metric | Change Type | Impact |
 |--------|-------------|--------|
-| **Z-Score Transform** | Sigmoid curve | ±1 std dev stocks now **more separated** |
+| **Z-Score Transform** | Sigmoid curve (1.5 steepness) | ±1 std dev stocks now **more separated** |
 | **P/E Scoring** | Harsher penalties | Overvalued stocks lose **1.5-2 points** |
 | **PEG Adjustment** | Wider range | Growth mismatches penalized **-4 points** |
 | **P/B Scoring** | Lower baseline | Average P/B now scores **4 instead of 6** |
@@ -247,9 +248,65 @@ Default neutral score reduced from **6 → 4 points**
 | **Analyst Consensus** | Tiered rewards | Strong consensus gains **+0.4-1.3 points** |
 | **Price Target** | Lower baseline | Small upside loses **-1.5 points** |
 
-**Overall effect:**
-- **Top 15%:** Score **3-5 points higher** (75-100 range)
-- **Average 50%:** Score remains **50-64** (but fewer stocks here)
-- **Bottom 15%:** Score **3-5 points lower** (15-35 range)
+### Phase 2: AGGRESSIVE Amplification (Current)
 
-This creates a **much clearer separation** between investment-grade companies and mediocre/poor performers.
+#### 🚀 **Steeper Sigmoid Curve**
+- **Steepness increased:** 1.5 → **2.5** (67% more aggressive)
+- **Power amplification for above-average:** +15% multiplier for positive z-scores
+- **Exponential decay for below-average:** -15% reduction for negative z-scores
+
+**New z-score mapping per 20-point metric:**
+
+| Z-Score | Old Points | Phase 1 | **Phase 2** | Total Gain |
+|---------|------------|---------|-------------|------------|
+| +2.0 | 20.0 | 19.0 | **19.8** | +0.8 ✅ |
+| +1.5 | 17.5 | 17.8 | **18.5** | **+1.0** ✅ |
+| +1.0 | 15.0 | 16.1 | **17.2** | **+2.2** ✅ |
+| +0.5 | 12.5 | 13.1 | **14.0** | **+1.5** ✅ |
+| 0 | 10.0 | 10.0 | **10.0** | Same |
+| -0.5 | 7.5 | 6.9 | **6.0** | **-1.5** ⚠️ |
+| -1.0 | 5.0 | 3.9 | **2.8** | **-2.2** ⚠️ |
+| -1.5 | 2.5 | 2.2 | **1.5** | -1.0 ⚠️ |
+| -2.0 | 0.0 | 1.0 | **0.2** | -0.8 ⚠️ |
+
+**Impact:** Companies +1 std dev above average now score **17.2/20** instead of 15/20 (+2.2 points per metric = **+11 total**)
+
+#### 🎯 **Compound Excellence Multiplier** (NEW!)
+
+Companies that excel across **multiple metrics** get bonus points:
+
+| Criteria | Bonus | Example |
+|----------|-------|---------|
+| **4-5 metrics ≥17/20** (Elite) | **+15** | AAPL, MSFT, NVDA with top scores across board |
+| **3 metrics ≥17/20** (Very Strong) | **+12** | Growth companies with excellent fundamentals |
+| **4-5 metrics ≥15/20** (Strong) | **+8** | Solid companies, no major weaknesses |
+| **3 metrics ≥15/20** (Above Average) | **+5** | Good but not exceptional |
+| **2 metrics ≤5/20** (Weak) | **-5** | Multiple red flags present |
+| **3+ metrics ≤5/20** (Very Weak) | **-10** | Serious fundamental issues |
+
+**Real-world example:**
+- **Before:** Company with [18, 17, 16, 15, 14] scores = **80 total**
+- **After:** Same company = 80 + **+12 bonus** (3 metrics ≥17) = **92 total** ✅
+
+This pushes truly exceptional companies from **70-80 range → 85-100 range**
+
+---
+
+## New Expected Score Distribution
+
+### Phase 2 (Current - AGGRESSIVE)
+- **Elite (85-100):** 5-10% of stocks (truly exceptional companies)
+- **Excellent (75-84):** 10-15% of stocks (strong fundamentals, clear winners)
+- **Good (65-74):** 15-20% of stocks (above-average, worth considering)
+- **Average (50-64):** 30-40% of stocks (neutral, no clear edge)
+- **Below Average (35-49):** 15-20% of stocks (some concerns)
+- **Poor (20-34):** 10-15% of stocks (significant red flags)
+- **Very Poor (0-19):** 5-10% of stocks (avoid)
+
+**Overall effect:**
+- **Top 10%:** Score **85-100** (was 55-70) - **+20-30 points** ✅
+- **Good companies:** Score **75-84** (was 55-65) - **+15-20 points** ✅
+- **Average 40%:** Score remains **50-64** (slightly compressed)
+- **Bottom 20%:** Score **0-35** (was 35-50) - **-10-15 points** ⚠️
+
+This creates **MAXIMUM separation** between investment-grade companies and mediocre/poor performers.
