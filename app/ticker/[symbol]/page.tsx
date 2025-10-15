@@ -517,9 +517,14 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
         {/* Earnings Card */}
         {data.earnings && (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              📅 Upcoming Earnings
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                📅 Upcoming Earnings
+              </h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Verify on company IR page
+              </p>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <p className="text-gray-500 dark:text-gray-400 text-sm">Date</p>

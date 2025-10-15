@@ -136,8 +136,9 @@ export async function GET(request: NextRequest) {
         { cache: 'no-store' }
       ).catch(() => new Response(JSON.stringify([]), { status: 200 })),
       // Earnings calendar - upcoming earnings date and estimates (NON-CRITICAL - graceful degradation)
+      // Extended to 120 days to catch quarterly earnings (most companies report every ~90 days)
       fetchWithRetry(
-        `${FINNHUB_BASE_URL}/calendar/earnings?symbol=${symbol}&from=${toDate}&to=${getFutureDate(90)}&token=${FINNHUB_API_KEY}`,
+        `${FINNHUB_BASE_URL}/calendar/earnings?symbol=${symbol}&from=${toDate}&to=${getFutureDate(120)}&token=${FINNHUB_API_KEY}`,
         { cache: 'no-store' }
       ).catch(() => new Response(JSON.stringify({ earningsCalendar: [] }), { status: 200 })),
       // Basic financials - comprehensive metrics (NON-CRITICAL - graceful degradation)
@@ -235,11 +236,22 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Extract next earnings event (first in the calendar)
-    const nextEarnings: EarningsEvent | null = 
-      earningsData.earningsCalendar && earningsData.earningsCalendar.length > 0
-        ? earningsData.earningsCalendar[0]
-        : null;
+    // Extract next earnings event (first in the calendar after sorting by date)
+    // Note: Finnhub free tier may have limited/outdated earnings data
+    // For more accurate earnings dates, consider premium data providers or company IR pages
+    let nextEarnings: EarningsEvent | null = null;
+    
+    if (earningsData.earningsCalendar && earningsData.earningsCalendar.length > 0) {
+      // Sort earnings by date (ascending) to get the earliest upcoming one
+      const sortedEarnings = [...earningsData.earningsCalendar].sort((a, b) => {
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+      
+      // Filter to only future dates (in case API returns past earnings)
+      const futureEarnings = sortedEarnings.filter(e => new Date(e.date) >= new Date());
+      
+      nextEarnings = futureEarnings.length > 0 ? futureEarnings[0] : null;
+    }
 
     // Fetch peer companies for industry comparison
     // This enables context-aware scoring relative to industry benchmarks
