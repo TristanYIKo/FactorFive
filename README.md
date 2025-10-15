@@ -12,8 +12,6 @@ Live Price & Daily Change
 
 Company Information (name, logo, market cap, industry)
 
-Upcoming Earnings Dates
-
 Recent News Headlines
 
 A Custom “Stock Score” (0–100) based on price movement and news volume
