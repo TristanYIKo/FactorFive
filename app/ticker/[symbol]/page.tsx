@@ -12,9 +12,10 @@ import { filterAndSortNewsByRelevance } from '@/lib/newsFilter';
  * Displays comprehensive stock information:
  * - Profile header with logo and company name
  * - Price and percent change panel
- * - Upcoming earnings card with date and estimates
+ * - FactorFive Score with detailed breakdown
+ * - News sentiment analysis (positive/negative/neutral)
+ * - Analyst recommendations and price targets
  * - Chronological news list with source and published time
- * - Visual progress bar showing computed FactorFive Score
  * 
  * Includes graceful loading and error states
  */
@@ -510,63 +511,6 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
-
-        {/* Earnings Card */}
-        {data.earnings && (
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                📅 Upcoming Earnings
-              </h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Verify on company IR page
-              </p>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">Date</p>
-                <p className="font-semibold text-gray-900 dark:text-white">
-                  {new Date(data.earnings.date).toLocaleDateString('en-US', {
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {data.earnings.hour === 'bmo' ? 'Before Market Open' : 
-                   data.earnings.hour === 'amc' ? 'After Market Close' : 
-                   data.earnings.hour}
-                </p>
-              </div>
-              <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">EPS Estimate</p>
-                <p className="font-semibold text-gray-900 dark:text-white">
-                  {data.earnings.epsEstimate !== null && data.earnings.epsEstimate !== undefined
-                    ? `$${data.earnings.epsEstimate.toFixed(2)}`
-                    : 'N/A'}
-                </p>
-                {data.earnings.epsActual !== null && data.earnings.epsActual !== undefined && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Actual: ${data.earnings.epsActual.toFixed(2)}
-                  </p>
-                )}
-              </div>
-              <div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">Revenue Estimate</p>
-                <p className="font-semibold text-gray-900 dark:text-white">
-                  {data.earnings.revenueEstimate !== null && data.earnings.revenueEstimate !== undefined
-                    ? formatCurrency(data.earnings.revenueEstimate)
-                    : 'N/A'}
-                </p>
-                {data.earnings.revenueActual !== null && data.earnings.revenueActual !== undefined && (
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Actual: {formatCurrency(data.earnings.revenueActual)}
-                  </p>
-                )}
-              </div>
             </div>
           </div>
         )}

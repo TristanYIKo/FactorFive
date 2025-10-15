@@ -6,8 +6,6 @@ import {
   FinnhubQuote,
   FinnhubProfile,
   FinnhubNewsArticle,
-  FinnhubEarnings,
-  EarningsEvent,
   FinnhubBasicFinancials,
   FinnhubRecommendationTrend,
   FinnhubPriceTarget,
@@ -119,7 +117,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch all data in parallel from Finnhub with retry logic and timeouts
     // Using cache: "no-store" to ensure fresh data during development
-    const [quoteRes, profileRes, newsRes, earningsRes, financialsRes, recommendationsRes, priceTargetRes, newsAPIRes] = await Promise.all([
+    const [quoteRes, profileRes, newsRes, financialsRes, recommendationsRes, priceTargetRes, newsAPIRes] = await Promise.all([
       // Quote endpoint - current price and daily change (CRITICAL - no fallback)
       fetchWithRetry(
         `${FINNHUB_BASE_URL}/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`,
@@ -135,12 +133,6 @@ export async function GET(request: NextRequest) {
         `${FINNHUB_BASE_URL}/company-news?symbol=${symbol}&from=${fromDate}&to=${toDate}&token=${FINNHUB_API_KEY}`,
         { cache: 'no-store' }
       ).catch(() => new Response(JSON.stringify([]), { status: 200 })),
-      // Earnings calendar - upcoming earnings date and estimates (NON-CRITICAL - graceful degradation)
-      // Extended to 120 days to catch quarterly earnings (most companies report every ~90 days)
-      fetchWithRetry(
-        `${FINNHUB_BASE_URL}/calendar/earnings?symbol=${symbol}&from=${toDate}&to=${getFutureDate(120)}&token=${FINNHUB_API_KEY}`,
-        { cache: 'no-store' }
-      ).catch(() => new Response(JSON.stringify({ earningsCalendar: [] }), { status: 200 })),
       // Basic financials - comprehensive metrics (NON-CRITICAL - graceful degradation)
       fetchWithRetry(
         `${FINNHUB_BASE_URL}/stock/metric?symbol=${symbol}&metric=all&token=${FINNHUB_API_KEY}`,
@@ -169,7 +161,6 @@ export async function GET(request: NextRequest) {
     const quote: FinnhubQuote = await quoteRes.json();
     const profile: FinnhubProfile = await profileRes.json();
     const news: FinnhubNewsArticle[] = newsRes.ok ? await newsRes.json() : [];
-    const earningsData: FinnhubEarnings = earningsRes.ok ? await earningsRes.json() : { earningsCalendar: [] };
     const financials: FinnhubBasicFinancials | null = financialsRes.ok ? await financialsRes.json() : null;
     const recommendations: FinnhubRecommendationTrend[] = recommendationsRes.ok ? await recommendationsRes.json() : [];
     const priceTarget: FinnhubPriceTarget | null = priceTargetRes.ok ? await priceTargetRes.json() : null;
@@ -236,23 +227,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Extract next earnings event (first in the calendar after sorting by date)
-    // Note: Finnhub free tier may have limited/outdated earnings data
-    // For more accurate earnings dates, consider premium data providers or company IR pages
-    let nextEarnings: EarningsEvent | null = null;
-    
-    if (earningsData.earningsCalendar && earningsData.earningsCalendar.length > 0) {
-      // Sort earnings by date (ascending) to get the earliest upcoming one
-      const sortedEarnings = [...earningsData.earningsCalendar].sort((a, b) => {
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
-      });
-      
-      // Filter to only future dates (in case API returns past earnings)
-      const futureEarnings = sortedEarnings.filter(e => new Date(e.date) >= new Date());
-      
-      nextEarnings = futureEarnings.length > 0 ? futureEarnings[0] : null;
-    }
-
     // Fetch peer companies for industry comparison
     // This enables context-aware scoring relative to industry benchmarks
     const peerMetrics = await fetchPeerMetrics(symbol, profile.finnhubIndustry || 'Technology');
@@ -277,7 +251,7 @@ export async function GET(request: NextRequest) {
       news: news,
       newsAPIArticles: newsAPIArticles.length > 0 ? newsAPIArticles : undefined,
       sentiment: sentiment,
-      earnings: nextEarnings,
+      earnings: null, // Earnings data removed due to unreliable free API data
       financials: financials,
       recommendations: recommendations,
       priceTarget: priceTarget,
