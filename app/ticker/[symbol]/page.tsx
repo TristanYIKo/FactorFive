@@ -28,6 +28,11 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
   const [searchTicker, setSearchTicker] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Update document title based on symbol
+  useEffect(() => {
+    document.title = `${symbol.toUpperCase()} - FactorFive Stock Analysis`;
+  }, [symbol]);
+
   useEffect(() => {
     const fetchStockData = async () => {
       setLoading(true);
