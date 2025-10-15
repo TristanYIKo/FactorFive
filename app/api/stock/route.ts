@@ -334,10 +334,13 @@ async function fetchPeerMetrics(symbol: string, industry: string): Promise<PeerM
           revenueGrowth: metricsData.metric?.revenueGrowthQuarterlyYoy ?? metricsData.metric?.revenueGrowthAnnual,
           epsGrowth: metricsData.metric?.epsGrowthQuarterlyYoy ?? metricsData.metric?.epsGrowthAnnual,
           roe: metricsData.metric?.roeRfy,
+          roa: metricsData.metric?.roaRfy,
           netMargin: metricsData.metric?.netProfitMarginAnnual,
           operatingMargin: metricsData.metric?.operatingMarginAnnual,
           pe: metricsData.metric?.peNormalizedAnnual,
           pb: metricsData.metric?.pbAnnual,
+          debtEquity: metricsData.metric?.debtEquityAnnual,
+          currentRatio: metricsData.metric?.currentRatioAnnual,
           momentum1M: quoteData.dp, // Using daily change as proxy
           momentum3M: quoteData.dp, // Would need historical data for true 3M momentum
         };

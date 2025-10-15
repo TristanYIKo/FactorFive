@@ -319,20 +319,20 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                   </div>
                 </div>
                 <div 
-                  className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-3 border border-orange-200 dark:border-orange-700 cursor-help relative group"
-                  title={data.scoreBreakdown.tooltips.momentum}
+                  className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20 rounded-lg p-3 border border-cyan-200 dark:border-cyan-700 cursor-help relative group"
+                  title={data.scoreBreakdown.tooltips.quality}
                 >
-                  <p className="text-orange-600 dark:text-orange-400 text-xs font-medium mb-1">
-                    Momentum
-                    <span className="ml-1 text-[10px] bg-orange-200 dark:bg-orange-800 px-1 rounded">
-                      {data.scoreBreakdown.peerContext.percentileRanks.momentum}%ile
+                  <p className="text-cyan-600 dark:text-cyan-400 text-xs font-medium mb-1">
+                    Quality
+                    <span className="ml-1 text-[10px] bg-cyan-200 dark:bg-cyan-800 px-1 rounded">
+                      {data.scoreBreakdown.peerContext.percentileRanks.quality}%ile
                     </span>
                   </p>
                   <p className="font-bold text-gray-900 dark:text-white text-lg">
-                    {data.scoreBreakdown.momentumScore}<span className="text-sm text-gray-500">/20</span>
+                    {data.scoreBreakdown.qualityScore}<span className="text-sm text-gray-500">/20</span>
                   </p>
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-gray-900 text-white text-xs rounded-lg p-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
-                    {data.scoreBreakdown.tooltips.momentum}
+                    {data.scoreBreakdown.tooltips.quality}
                   </div>
                 </div>
                 <div 
@@ -376,22 +376,22 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
         {/* Detailed Metrics Section */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            📊 Detailed Metrics Breakdown
+            📊 Five-Factor Company Valuation Model
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-            Deep dive into the components that make up the FactorFive Score. Each metric is analyzed relative to industry peers.
+            Comprehensive analysis using our proprietary 5-factor model: Growth, Profitability, Valuation, Quality, and Analyst Predictions. Each factor is scored 0-20 and normalized against {data.scoreBreakdown.peerContext.peerCount} industry peers in the {data.scoreBreakdown.peerContext.industry} sector.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Growth Metrics */}
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-5 border border-blue-200 dark:border-blue-700">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-5 border border-blue-200 dark:border-blue-700 group relative">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-10 h-10 rounded-full bg-blue-500 dark:bg-blue-600 flex items-center justify-center text-white font-bold text-lg">
                   {data.scoreBreakdown.growthScore}
                 </div>
                 <div>
-                  <h3 className="font-bold text-blue-700 dark:text-blue-300 text-sm">Growth</h3>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">Score: {data.scoreBreakdown.growthScore}/20</p>
+                  <h3 className="font-bold text-blue-700 dark:text-blue-300 text-sm">📈 Growth</h3>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">Revenue, EPS & Sales Trends</p>
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -403,17 +403,20 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                   <span className="font-bold text-blue-700 dark:text-blue-300">{data.scoreBreakdown.peerContext.percentileRanks.growth}%</span>
                 </div>
               </div>
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
+                <strong>Growth Analysis:</strong> Evaluates revenue growth, EPS expansion, and sales trends compared to industry averages. Higher scores indicate stronger organic growth momentum.
+              </div>
             </div>
 
             {/* Profitability Metrics */}
-            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-5 border border-green-200 dark:border-green-700">
+            <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-5 border border-green-200 dark:border-green-700 group relative">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-10 h-10 rounded-full bg-green-500 dark:bg-green-600 flex items-center justify-center text-white font-bold text-lg">
                   {data.scoreBreakdown.profitabilityScore}
                 </div>
                 <div>
-                  <h3 className="font-bold text-green-700 dark:text-green-300 text-sm">Profitability</h3>
-                  <p className="text-xs text-green-600 dark:text-green-400">Score: {data.scoreBreakdown.profitabilityScore}/20</p>
+                  <h3 className="font-bold text-green-700 dark:text-green-300 text-sm">💰 Profitability</h3>
+                  <p className="text-xs text-green-600 dark:text-green-400">Margins, ROE & Efficiency</p>
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -425,17 +428,20 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                   <span className="font-bold text-green-700 dark:text-green-300">{data.scoreBreakdown.peerContext.percentileRanks.profitability}%</span>
                 </div>
               </div>
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
+                <strong>Profitability Analysis:</strong> Measures operating and net margins, ROE (return on equity), and ROA. ROE reflects management efficiency in using shareholder capital to generate profits.
+              </div>
             </div>
 
             {/* Valuation Metrics */}
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-5 border border-purple-200 dark:border-purple-700">
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-lg p-5 border border-purple-200 dark:border-purple-700 group relative">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-10 h-10 rounded-full bg-purple-500 dark:bg-purple-600 flex items-center justify-center text-white font-bold text-lg">
                   {data.scoreBreakdown.valuationScore}
                 </div>
                 <div>
-                  <h3 className="font-bold text-purple-700 dark:text-purple-300 text-sm">Valuation</h3>
-                  <p className="text-xs text-purple-600 dark:text-purple-400">Score: {data.scoreBreakdown.valuationScore}/20</p>
+                  <h3 className="font-bold text-purple-700 dark:text-purple-300 text-sm">💎 Valuation</h3>
+                  <p className="text-xs text-purple-600 dark:text-purple-400">P/E, P/B & PEG Ratios</p>
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -447,39 +453,45 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                   <span className="font-bold text-purple-700 dark:text-purple-300">{data.scoreBreakdown.peerContext.percentileRanks.valuation}%</span>
                 </div>
               </div>
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
+                <strong>Valuation Analysis:</strong> Compares P/E (price-to-earnings), P/B (price-to-book), and PEG ratios normalized by sector. Lower ratios indicate better value relative to fundamentals.
+              </div>
             </div>
 
-            {/* Momentum Metrics */}
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 rounded-lg p-5 border border-orange-200 dark:border-orange-700">
+            {/* Quality Metrics */}
+            <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20 rounded-lg p-5 border border-cyan-200 dark:border-cyan-700 group relative">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-10 h-10 rounded-full bg-orange-500 dark:bg-orange-600 flex items-center justify-center text-white font-bold text-lg">
-                  {data.scoreBreakdown.momentumScore}
+                <div className="w-10 h-10 rounded-full bg-cyan-500 dark:bg-cyan-600 flex items-center justify-center text-white font-bold text-lg">
+                  {data.scoreBreakdown.qualityScore}
                 </div>
                 <div>
-                  <h3 className="font-bold text-orange-700 dark:text-orange-300 text-sm">Momentum</h3>
-                  <p className="text-xs text-orange-600 dark:text-orange-400">Score: {data.scoreBreakdown.momentumScore}/20</p>
+                  <h3 className="font-bold text-cyan-700 dark:text-cyan-300 text-sm">🏆 Quality</h3>
+                  <p className="text-xs text-cyan-600 dark:text-cyan-400">Balance Sheet & Stability</p>
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                {data.scoreBreakdown.details.momentum}
+                {data.scoreBreakdown.details.quality}
               </p>
-              <div className="mt-3 pt-3 border-t border-orange-300 dark:border-orange-700">
+              <div className="mt-3 pt-3 border-t border-cyan-300 dark:border-cyan-700">
                 <div className="flex justify-between text-xs">
-                  <span className="text-orange-600 dark:text-orange-400 font-medium">Industry Percentile</span>
-                  <span className="font-bold text-orange-700 dark:text-orange-300">{data.scoreBreakdown.peerContext.percentileRanks.momentum}%</span>
+                  <span className="text-cyan-600 dark:text-cyan-400 font-medium">Industry Percentile</span>
+                  <span className="font-bold text-cyan-700 dark:text-cyan-300">{data.scoreBreakdown.peerContext.percentileRanks.quality}%</span>
                 </div>
+              </div>
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
+                <strong>Quality Analysis:</strong> Evaluates balance-sheet health through debt/equity ratios, current ratio (liquidity), and ROA. Lower debt and higher liquidity indicate stronger financial stability and lower risk.
               </div>
             </div>
 
             {/* Analyst Metrics */}
-            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg p-5 border border-indigo-200 dark:border-indigo-700">
+            <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg p-5 border border-indigo-200 dark:border-indigo-700 group relative">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-10 h-10 rounded-full bg-indigo-500 dark:bg-indigo-600 flex items-center justify-center text-white font-bold text-lg">
                   {data.scoreBreakdown.analystScore}
                 </div>
                 <div>
-                  <h3 className="font-bold text-indigo-700 dark:text-indigo-300 text-sm">Analyst Ratings</h3>
-                  <p className="text-xs text-indigo-600 dark:text-indigo-400">Score: {data.scoreBreakdown.analystScore}/20</p>
+                  <h3 className="font-bold text-indigo-700 dark:text-indigo-300 text-sm">🎯 Analyst Predictions</h3>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400">Target Price & Consensus</p>
                 </div>
               </div>
               <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
@@ -490,6 +502,9 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
                   <span className="text-indigo-600 dark:text-indigo-400 font-medium">Industry Percentile</span>
                   <span className="font-bold text-indigo-700 dark:text-indigo-300">{data.scoreBreakdown.peerContext.percentileRanks.analyst}%</span>
                 </div>
+              </div>
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-10 shadow-lg">
+                <strong>Analyst Predictions:</strong> Aggregates professional analyst ratings (buy/sell/hold), price target upside potential, and earnings revision trends. Strong consensus indicates market confidence in the company's prospects.
               </div>
             </div>
 

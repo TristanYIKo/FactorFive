@@ -64,10 +64,13 @@ export interface PeerMetrics {
   revenueGrowth?: number;
   epsGrowth?: number;
   roe?: number;
+  roa?: number;
   netMargin?: number;
   operatingMargin?: number;
   pe?: number;
   pb?: number;
+  debtEquity?: number;
+  currentRatio?: number;
   momentum1M?: number;
   momentum3M?: number;
 }
@@ -92,14 +95,14 @@ export interface ScoreBreakdown {
   growthScore: number; // 0-20
   profitabilityScore: number; // 0-20
   valuationScore: number; // 0-20
-  momentumScore: number; // 0-20
+  qualityScore: number; // 0-20 (replaces momentum)
   analystScore: number; // 0-20
   description: string;
   details: {
     growth: string;
     profitability: string;
     valuation: string;
-    momentum: string;
+    quality: string; // replaces momentum
     analyst: string;
   };
   // Contextual explanations for each score
@@ -107,7 +110,7 @@ export interface ScoreBreakdown {
     growth: string;
     profitability: string;
     valuation: string;
-    momentum: string;
+    quality: string; // replaces momentum
     analyst: string;
   };
   // Peer comparison context
@@ -118,7 +121,7 @@ export interface ScoreBreakdown {
       growth: number; // 0-100
       profitability: number;
       valuation: number;
-      momentum: number;
+      quality: number; // replaces momentum
       analyst: number;
     };
   };

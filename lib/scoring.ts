@@ -446,66 +446,103 @@ function calculateValuationScore(
 }
 
 /**
- * MOMENTUM SCORE (0-20 points)
+ * QUALITY SCORE (0-20 points)
  * 
- * Uses recent price trends relative to sector and market benchmarks.
- * Positive momentum vs peers increases score.
+ * Evaluates balance-sheet health, earnings stability, and free-cash-flow consistency.
+ * Key metrics: Debt/Equity ratio, Current Ratio, ROA, and financial strength vs peers.
  */
-function calculateMomentumScore(
-  quote: FinnhubQuote,
+function calculateQualityScore(
   financials: FinnhubBasicFinancials | null,
   peerMetrics: PeerMetrics[],
   benchmarks: IndustryBenchmarks
 ): { score: number; detail: string; tooltip: string; percentile: number } {
-  const currentPrice = quote.c;
-  const dailyChange = quote.dp;
-  
-  // Calculate 52-week position
-  const high52 = financials?.metric?.['52WeekHigh'] ?? currentPrice;
-  const low52 = financials?.metric?.['52WeekLow'] ?? currentPrice;
-  const range52 = high52 - low52;
-  const position52Week = range52 > 0 ? ((currentPrice - low52) / range52) * 100 : 50;
-
-  // Use industry average momentum as benchmark
-  const avgMomentum = benchmarks.avgMomentum1M;
-
-  // Extract peer momentum
-  const peerMomentum = peerMetrics.map(p => p.momentum1M).filter(v => v !== undefined) as number[];
-  
-  const stdDevMomentum = Math.sqrt(
-    peerMomentum.reduce((sum, v) => sum + Math.pow(v - avgMomentum, 2), 0) / Math.max(peerMomentum.length, 1)
-  );
-
-  // Calculate z-score for daily momentum
-  const momentumZScore = calculateZScore(dailyChange, avgMomentum, stdDevMomentum || 2);
-
-  // Daily momentum: 10 points (using non-linear z-score transformation)
-  const dailyPoints = zScoreToPoints(momentumZScore, 10);
-
-  // 52-week position: 10 points (NON-LINEAR - rewards stocks near highs more)
-  // Use exponential curve: stocks at 90%+ of 52W high get disproportionate rewards
-  let position52Points = 0;
-  if (position52Week >= 90) {
-    position52Points = 9 + (position52Week - 90) * 0.1; // 9-10 points for 90-100%
-  } else if (position52Week >= 75) {
-    position52Points = 7 + (position52Week - 75) * 0.133; // 7-9 points for 75-90%
-  } else if (position52Week >= 50) {
-    position52Points = 4 + (position52Week - 50) * 0.12; // 4-7 points for 50-75%
-  } else if (position52Week >= 25) {
-    position52Points = 2 + (position52Week - 25) * 0.08; // 2-4 points for 25-50%
-  } else {
-    position52Points = (position52Week / 25) * 2; // 0-2 points for 0-25%
+  if (!financials?.metric) {
+    return {
+      score: 10,
+      detail: 'Limited quality data available',
+      tooltip: 'Insufficient data for quality analysis',
+      percentile: 50,
+    };
   }
 
-  const totalScore = Math.round(dailyPoints + position52Points);
+  const metric = financials.metric;
+  
+  // Balance sheet health metrics
+  const debtToEquity = metric.debtEquityAnnual ?? 999; // Default high if missing
+  const currentRatio = metric.currentRatioAnnual ?? 1.0;
+  const quickRatio = metric.quickRatioAnnual ?? currentRatio * 0.7; // Estimate if missing
+  const roa = metric.roaRfy ?? 0;
 
-  // Percentile
-  const percentile = Math.round(calculatePercentile(dailyChange, peerMomentum));
+  // Extract peer quality metrics
+  const peerDebtEquity = peerMetrics.map(p => p.debtEquity).filter(v => v !== undefined && v < 500) as number[];
+  const peerCurrentRatio = peerMetrics.map(p => p.currentRatio).filter(v => v !== undefined) as number[];
+  const peerRoa = peerMetrics.map(p => p.roa).filter(v => v !== undefined) as number[];
 
-  const detail = `Daily: ${dailyChange.toFixed(2)}% (sector avg ${avgMomentum.toFixed(2)}%), 52W position: ${position52Week.toFixed(0)}%`;
+  // Calculate peer averages
+  const avgDebtEquity = peerDebtEquity.length > 0 
+    ? peerDebtEquity.reduce((a, b) => a + b, 0) / peerDebtEquity.length 
+    : 1.0;
+  const avgCurrentRatio = peerCurrentRatio.length > 0
+    ? peerCurrentRatio.reduce((a, b) => a + b, 0) / peerCurrentRatio.length
+    : 1.5;
+  const avgRoa = benchmarks.avgRoe * 0.5; // ROA typically ~50% of ROE
+
+  // Calculate standard deviations
+  const stdDevDebtEquity = peerDebtEquity.length > 0
+    ? Math.sqrt(peerDebtEquity.reduce((sum, v) => sum + Math.pow(v - avgDebtEquity, 2), 0) / peerDebtEquity.length)
+    : 0.5;
+  const stdDevCurrentRatio = peerCurrentRatio.length > 0
+    ? Math.sqrt(peerCurrentRatio.reduce((sum, v) => sum + Math.pow(v - avgCurrentRatio, 2), 0) / peerCurrentRatio.length)
+    : 0.5;
+  const stdDevRoa = Math.sqrt(
+    peerRoa.reduce((sum, v) => sum + Math.pow(v - avgRoa, 2), 0) / Math.max(peerRoa.length, 1)
+  );
+
+  // Calculate z-scores (inverted for debt - lower is better)
+  const debtZScore = -calculateZScore(debtToEquity, avgDebtEquity, stdDevDebtEquity || 0.5);
+  const currentRatioZScore = calculateZScore(currentRatio, avgCurrentRatio, stdDevCurrentRatio || 0.5);
+  const roaZScore = calculateZScore(roa, avgRoa, stdDevRoa || 2);
+
+  // Convert to points (8 points for debt, 6 for liquidity, 6 for ROA)
+  const debtPoints = zScoreToPoints(debtZScore, 8);
+  const liquidityPoints = zScoreToPoints(currentRatioZScore, 6);
+  const roaPoints = zScoreToPoints(roaZScore, 6);
+
+  const totalScore = Math.round(debtPoints + liquidityPoints + roaPoints);
+
+  // Calculate composite percentile
+  const compositeQuality = (
+    (debtToEquity < 2 ? 100 - (debtToEquity / 2) * 50 : 50 - Math.min(50, (debtToEquity - 2) * 10)) +
+    (currentRatio * 25) +
+    (roa * 2)
+  ) / 3;
+  
+  const peerCompositeQuality = peerMetrics.map(p => {
+    const d = p.debtEquity ?? 1;
+    const c = p.currentRatio ?? 1.5;
+    const r = p.roa ?? 0;
+    return ((d < 2 ? 100 - (d / 2) * 50 : 50 - Math.min(50, (d - 2) * 10)) + (c * 25) + (r * 2)) / 3;
+  });
+  
+  const percentile = Math.round(calculatePercentile(compositeQuality, peerCompositeQuality));
+
+  // Generate contextual explanation
+  const debtStatus = debtToEquity < 0.3 ? 'minimal debt' 
+    : debtToEquity < 0.7 ? 'low debt'
+    : debtToEquity < 1.5 ? 'moderate debt'
+    : debtToEquity < 3.0 ? 'elevated debt'
+    : 'high debt';
+  
+  const liquidityStatus = currentRatio > 2.5 ? 'excellent liquidity'
+    : currentRatio > 1.5 ? 'strong liquidity'
+    : currentRatio > 1.0 ? 'adequate liquidity'
+    : 'liquidity concerns';
+
+  const detail = `D/E: ${debtToEquity < 100 ? debtToEquity.toFixed(2) : '>100'}x (${debtStatus}), Current ratio: ${currentRatio.toFixed(2)}x (${liquidityStatus}), ROA: ${roa.toFixed(1)}%`;
+  
   const tooltip = `${percentile}th percentile. ${
-    totalScore >= 15 ? 'Strong upward momentum' : totalScore >= 10 ? 'Neutral momentum' : 'Weak momentum'
-  } vs ${benchmarks.industry} peers`;
+    totalScore >= 15 ? 'Excellent financial health' : totalScore >= 10 ? 'Adequate balance sheet' : 'Financial health concerns'
+  } - ${debtStatus} with ${liquidityStatus}`;
 
   return { score: totalScore, detail, tooltip, percentile };
 }
@@ -603,16 +640,16 @@ export function calculateIntelligentStockScore(
   const growth = calculateGrowthScore(financials, peerMetrics, benchmarks);
   const profitability = calculateProfitabilityScore(financials, peerMetrics, benchmarks);
   const valuation = calculateValuationScore(financials, peerMetrics, benchmarks);
-  const momentum = calculateMomentumScore(quote, financials, peerMetrics, benchmarks);
+  const quality = calculateQualityScore(financials, peerMetrics, benchmarks);
   const analyst = calculateAnalystScore(quote, recommendations, priceTarget);
 
   // Calculate base total score
-  let totalScore = growth.score + profitability.score + valuation.score + momentum.score + analyst.score;
+  let totalScore = growth.score + profitability.score + valuation.score + quality.score + analyst.score;
 
   // COMPOUND EXCELLENCE MULTIPLIER
   // Companies that excel in multiple areas get a bonus boost
   // This pushes truly exceptional companies from 70-75 range into 80-95 range
-  const scores = [growth.score, profitability.score, valuation.score, momentum.score, analyst.score];
+  const scores = [growth.score, profitability.score, valuation.score, quality.score, analyst.score];
   const strongScores = scores.filter(s => s >= 15).length; // Count metrics scoring 15+ (75th percentile)
   const excellentScores = scores.filter(s => s >= 17).length; // Count metrics scoring 17+ (85th percentile)
   
@@ -649,21 +686,21 @@ export function calculateIntelligentStockScore(
     growthScore: growth.score,
     profitabilityScore: profitability.score,
     valuationScore: valuation.score,
-    momentumScore: momentum.score,
+    qualityScore: quality.score,
     analystScore: analyst.score,
     description: `Context-aware analysis vs ${benchmarks.peerCount} ${industry} peers using z-score normalization${multiplierBonus !== 0 ? ` (${multiplierBonus > 0 ? '+' : ''}${multiplierBonus} compound ${multiplierBonus > 0 ? 'excellence' : 'concern'} adjustment)` : ''}`,
     details: {
       growth: growth.detail,
       profitability: profitability.detail,
       valuation: valuation.detail,
-      momentum: momentum.detail,
+      quality: quality.detail,
       analyst: analyst.detail,
     },
     tooltips: {
       growth: growth.tooltip,
       profitability: profitability.tooltip,
       valuation: valuation.tooltip,
-      momentum: momentum.tooltip,
+      quality: quality.tooltip,
       analyst: analyst.tooltip,
     },
     peerContext: {
@@ -673,7 +710,7 @@ export function calculateIntelligentStockScore(
         growth: growth.percentile,
         profitability: profitability.percentile,
         valuation: valuation.percentile,
-        momentum: momentum.percentile,
+        quality: quality.percentile,
         analyst: analyst.percentile,
       },
     },
