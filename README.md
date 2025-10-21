@@ -20,8 +20,6 @@ Live Price & Daily Change
 
 Company Information (name, logo, market cap, industry)
 
-Upcoming Earnings Dates
-
 Recent News Headlines
 
 Each factor is scored 0-20 points using non-linear sigmoid transformations and peer comparison, with a compound excellence multiplier for top performers.
