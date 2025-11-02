@@ -34,8 +34,8 @@ export function generateMarketCalendar(startDate: Date = new Date()): MarketEven
     { date: new Date('2025-06-17'), endDate: new Date('2025-06-18') },
     { date: new Date('2025-07-29'), endDate: new Date('2025-07-30') },
     { date: new Date('2025-09-16'), endDate: new Date('2025-09-17') },
-    { date: new Date('2025-11-04'), endDate: new Date('2025-11-05') },
-    { date: new Date('2025-12-16'), endDate: new Date('2025-12-17') },
+    // November 4th meeting removed per user request
+    { date: new Date('2025-12-09'), endDate: new Date('2025-12-10') }, // Changed from Dec 16-17 to Dec 9-10
   ];
 
   fomcDates2025.forEach((meeting, index) => {
@@ -75,7 +75,7 @@ export function generateMarketCalendar(startDate: Date = new Date()): MarketEven
     // PPI (Producer Price Index) - typically 2-3 days before CPI, around 11th
     events.push({
       id: `ppi-${year}-${month}`,
-      date: getEstimatedDate(year, month, 11, 3), // 11th day, usually Tuesday-Thursday
+      date: (year === 2025 && month === 10) ? new Date('2025-11-15') : getEstimatedDate(year, month, 11, 3), // November 2025 override to 14th
       title: 'PPI Report (Producer Price Index)',
       description: 'Bureau of Labor Statistics releases Producer Price Index, measuring wholesale inflation and input costs for businesses. Leading indicator for CPI.',
       category: 'Economic Data',
@@ -102,7 +102,7 @@ export function generateMarketCalendar(startDate: Date = new Date()): MarketEven
     const joltsTuesday = getNextTuesday(joltsDate);
     events.push({
       id: `jolts-${year}-${month}`,
-      date: joltsTuesday,
+      date: (year === 2025 && month === 10) ? new Date('2025-11-05') : joltsTuesday, // November 2025 override to 4th
       title: 'JOLTS Report (Job Openings)',
       description: 'Job Openings and Labor Turnover Survey showing labor market demand, hiring, quits, and layoffs. Fed watches closely.',
       category: 'Economic Data',
