@@ -32,6 +32,7 @@ import { calculateIntelligentStockScore } from '@/lib/scoring';
 import { analyzeNewsSentiment } from '@/lib/sentiment';
 import { finnhub, fetchPeerMetrics } from '@/lib/finnhub';
 import { upstreamJsonOptional } from '@/lib/upstream';
+import { buildMarketContext } from '@/lib/marketContext';
 
 /** Ticker symbols are letters, digits, dot, dash. Reject anything else. */
 const SYMBOL_PATTERN = /^[A-Z0-9.\-]{1,12}$/;
@@ -99,9 +100,10 @@ export async function GET(request: NextRequest) {
     const subjectMarketCap =
       metric.data?.metric?.marketCapitalization ?? profile.marketCapitalization;
 
-    const [peerResult, companyNews] = await Promise.all([
+    const [peerResult, companyNews, marketContext] = await Promise.all([
       fetchPeerMetrics(symbol, peerList, subjectMarketCap),
       fetchCompanyNews(profile.name),
+      buildMarketContext(quote, metric.data),
     ]);
 
     const { articles: newsAPIArticles, ok: newsApiOk } = companyNews;
@@ -143,6 +145,7 @@ export async function GET(request: NextRequest) {
       stockScore: scored.score,
       scoreBreakdown: scored.breakdown,
       industryBenchmarks: scored.benchmarks,
+      marketContext,
       // Surfaced so the UI can be honest about what the score is built on
       // instead of implying full peer analysis that did not happen.
       dataQuality: {

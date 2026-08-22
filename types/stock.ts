@@ -1,5 +1,9 @@
 // Type definitions for Finnhub API responses and Stock Score data
 
+// Type-only import; erased at compile time, so the cycle with lib/marketContext
+// (which imports the Finnhub types from here) costs nothing at runtime.
+import type { MarketContext } from '@/lib/marketContext';
+
 // Finnhub Quote endpoint response
 export interface FinnhubQuote {
   c: number; // Current price
@@ -178,6 +182,7 @@ export interface StockData {
   scoreBreakdown: ScoreBreakdown;
   industryBenchmarks?: IndustryBenchmarks;
   dataQuality?: DataQuality;
+  marketContext?: MarketContext;
 }
 
 /**
@@ -314,3 +319,15 @@ export interface ApiError {
   error: string;
   details?: string;
 }
+
+/**
+ * Market and risk context, computed in lib/marketContext.ts.
+ * Re-exported here so views import a single types module.
+ */
+export type {
+  MarketContext,
+  MarketRegime,
+  RelativeStrength,
+  RiskProfile,
+  ScenarioRange,
+} from '@/lib/marketContext';
