@@ -1,5 +1,9 @@
 // Type definitions for Finnhub API responses and Stock Score data
 
+// Type-only import; erased at compile time, so the cycle with lib/marketContext
+// (which imports the Finnhub types from here) costs nothing at runtime.
+import type { MarketContext } from '@/lib/marketContext';
+
 // Finnhub Quote endpoint response
 export interface FinnhubQuote {
   c: number; // Current price
@@ -61,6 +65,8 @@ export interface EarningsEvent {
 // Peer comparison data for relative analysis
 export interface PeerMetrics {
   symbol: string;
+  /** Market cap in millions USD, used to keep comparisons size-appropriate. */
+  marketCap?: number;
   revenueGrowth?: number;
   epsGrowth?: number;
   roe?: number;
@@ -76,18 +82,42 @@ export interface PeerMetrics {
 }
 
 // Industry benchmark statistics
+/** Median, interquartile range and dispersion for one peer metric. */
+export interface MetricDistribution {
+  median: number;
+  p25: number;
+  p75: number;
+  mad: number;
+  count: number;
+}
+
+/**
+ * Industry benchmarks built from peer fundamentals.
+ *
+ * These are MEDIANS, not means. Finnhub's peer lists include unvetted
+ * micro-caps whose percentage metrics swing by hundreds of percent, and an
+ * arithmetic mean over that produced benchmarks like "average Technology
+ * revenue growth: 149%". Medians with winsorized tails survive it.
+ *
+ * `reliable` is false when too few peers resolved to compute anything
+ * meaningful; consumers must not present benchmarks as authoritative when it
+ * is false.
+ */
 export interface IndustryBenchmarks {
   industry: string;
   peerCount: number;
-  avgRevenueGrowth: number;
-  avgEpsGrowth: number;
-  avgRoe: number;
-  avgNetMargin: number;
-  avgOperatingMargin: number;
-  avgPe: number;
-  avgPb: number;
-  avgMomentum1M: number;
-  avgMomentum3M: number;
+  reliable: boolean;
+  distributions: {
+    revenueGrowth: MetricDistribution | null;
+    epsGrowth: MetricDistribution | null;
+    roe: MetricDistribution | null;
+    netMargin: MetricDistribution | null;
+    operatingMargin: MetricDistribution | null;
+    pe: MetricDistribution | null;
+    pb: MetricDistribution | null;
+    debtEquity: MetricDistribution | null;
+    momentum3M: MetricDistribution | null;
+  };
 }
 
 // Enhanced score breakdown with relative context
@@ -113,16 +143,25 @@ export interface ScoreBreakdown {
     quality: string; // replaces momentum
     analyst: string;
   };
+  /**
+   * Confidence in the headline score, driven by how much real data backed it.
+   * 'low' means the number is indicative only - typically too few peers
+   * resolved, or fundamentals were missing.
+   */
+  confidence: 'high' | 'medium' | 'low';
+  /** Plain-language note on anything the score could not account for. */
+  caveats: string[];
   // Peer comparison context
   peerContext: {
     industry: string;
     peerCount: number;
+    /** null where there was not enough peer data to rank against. */
     percentileRanks: {
-      growth: number; // 0-100
-      profitability: number;
-      valuation: number;
-      quality: number; // replaces momentum
-      analyst: number;
+      growth: number | null; // 0-100
+      profitability: number | null;
+      valuation: number | null;
+      quality: number | null;
+      analyst: number | null;
     };
   };
 }
@@ -142,6 +181,29 @@ export interface StockData {
   stockScore: number; // 0-100
   scoreBreakdown: ScoreBreakdown;
   industryBenchmarks?: IndustryBenchmarks;
+  dataQuality?: DataQuality;
+  marketContext?: MarketContext;
+}
+
+/**
+ * What the score was actually computed from.
+ *
+ * Exists because the app used to fail silently: when peer fetches were rate
+ * limited the engine still emitted a confident number built on an empty peer
+ * set. The UI now has enough information to say so.
+ */
+export interface DataQuality {
+  peersResolved: number;
+  peersRequested: number;
+  /** False when too few peers resolved for the benchmark to mean anything. */
+  benchmarksReliable: boolean;
+  /** How size-comparable the peer cohort is, e.g. "closely size-matched". */
+  peerCohort?: string;
+  degradedReason?: string;
+  newsAvailable: boolean;
+  financialsAvailable: boolean;
+  generatedAt: string;
+  elapsedMs: number;
 }
 
 // Finnhub Basic Financials (annual and quarterly metrics)
@@ -170,10 +232,36 @@ export interface FinnhubBasicFinancials {
     debtEquityAnnual?: number; // Debt to Equity
     quickRatioAnnual?: number; // Quick ratio
     
-    // Momentum
+    // Momentum - real price returns supplied by Finnhub's metric endpoint.
+    // The scoring engine previously used quote.dp (today's percent change) as a
+    // stand-in for both 1M and 3M momentum; these are the actual series.
+    '5DayPriceReturnDaily'?: number;
+    '13WeekPriceReturnDaily'?: number; // ~3 month
+    '26WeekPriceReturnDaily'?: number; // ~6 month
+    '52WeekPriceReturnDaily'?: number; // ~12 month
+    monthToDatePriceReturnDaily?: number;
+    yearToDatePriceReturnDaily?: number;
     '52WeekHigh'?: number;
     '52WeekLow'?: number;
+    '52WeekHighDate'?: string;
+    '52WeekLowDate'?: string;
+
+    // Market-relative strength: excess return versus the S&P 500 over each
+    // window, in percentage points. Positive means the stock beat the index.
+    'priceRelativeToS&P5004Week'?: number;
+    'priceRelativeToS&P50013Week'?: number;
+    'priceRelativeToS&P50026Week'?: number;
+    'priceRelativeToS&P50052Week'?: number;
+
+    // Risk
     beta?: number;
+    '3MonthADReturnStd'?: number; // annualised daily-return volatility, %
+
+    // Size. Used to keep peer comparisons within a sane market-cap cohort,
+    // which is why it is read from the metric payload rather than costing a
+    // separate profile call per peer.
+    marketCapitalization?: number; // millions USD
+    enterpriseValue?: number;
   };
   series?: {
     annual?: Record<string, any>;
@@ -231,3 +319,15 @@ export interface ApiError {
   error: string;
   details?: string;
 }
+
+/**
+ * Market and risk context, computed in lib/marketContext.ts.
+ * Re-exported here so views import a single types module.
+ */
+export type {
+  MarketContext,
+  MarketRegime,
+  RelativeStrength,
+  RiskProfile,
+  ScenarioRange,
+} from '@/lib/marketContext';

@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-
 /**
- * Error boundary for ticker pages
- * Displays when an error occurs during rendering or data fetching
+ * Route error boundary. Offers a retry, because the most common failure here
+ * is a transient upstream rate limit rather than a permanent problem.
  */
+
+import { useEffect } from 'react';
+import Link from 'next/link';
+
 export default function Error({
   error,
   reset,
@@ -14,35 +15,41 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const router = useRouter();
-
   useEffect(() => {
-    console.error('Ticker page error:', error);
+    console.error('[ticker] render failed:', error);
   }, [error]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 text-center">
-        <div className="text-red-500 text-6xl mb-4">⚠️</div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Something went wrong
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-6">
-          {error.message || 'An unexpected error occurred while loading the stock data'}
+    <div
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{ background: 'var(--bg-base)' }}
+    >
+      <div
+        className="w-full max-w-md rounded-[var(--radius-lg)] border p-7 text-center"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)', boxShadow: 'var(--shadow-md)' }}
+      >
+        <h1 className="text-[18px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Could not load this ticker
+        </h1>
+        <p className="mt-2 text-[13.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          {error.message || 'Something went wrong while fetching market data.'}
         </p>
-        <div className="flex gap-3 justify-center">
+
+        <div className="mt-6 flex items-center justify-center gap-2.5">
           <button
-            onClick={() => reset()}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+            onClick={reset}
+            className="rounded-[var(--radius-md)] px-4 py-2 text-[13.5px] font-medium transition-opacity hover:opacity-85"
+            style={{ background: 'var(--accent)', color: '#fff' }}
           >
-            Try Again
+            Try again
           </button>
-          <button
-            onClick={() => router.push('/')}
-            className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200"
+          <Link
+            href="/"
+            className="rounded-[var(--radius-md)] border px-4 py-2 text-[13.5px] font-medium transition-colors"
+            style={{ borderColor: 'var(--border-strong)', color: 'var(--text-secondary)' }}
           >
-            Back to Home
-          </button>
+            Back to search
+          </Link>
         </div>
       </div>
     </div>

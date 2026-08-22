@@ -1,227 +1,163 @@
-'use client';
-
-import { useState, FormEvent, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import MarketCalendar from '@/components/MarketCalendar';
-
 /**
- * FactorFive - Home Page
- * 
- * Landing page with tabs:
- * - Stock Analysis: Ticker input for stock analysis
- * - Market Calendar: Shows upcoming economic events and key dates
+ * Home.
+ *
+ * A server component - the only interactivity is the search box and the
+ * calendar, each isolated in its own client boundary. The old page was one
+ * large `'use client'` component, so the whole thing shipped as JavaScript.
  */
-// Popular and recommended tickers grouped by category
-const RECOMMENDED_TICKERS = {
-  'Mega Cap Tech': ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META'],
-  'EV & Auto': ['TSLA', 'F', 'GM', 'RIVN'],
-  'Finance': ['JPM', 'BAC', 'GS', 'V', 'MA'],
-  'Healthcare': ['JNJ', 'UNH', 'PFE', 'MRNA'],
-  'Entertainment': ['DIS', 'NFLX', 'SPOT'],
-  'Semiconductors': ['AMD', 'INTC', 'TSM', 'QCOM'],
-  'Retail': ['WMT', 'TGT', 'COST', 'HD'],
-  'Energy': ['XOM', 'CVX', 'BP'],
-};
+
+import Link from 'next/link';
+import { TickerSearch } from '@/components/TickerSearch';
+import { HomeTabs } from '@/components/HomeTabs';
+
+const FACTORS = [
+  {
+    name: 'Growth',
+    colour: 'var(--factor-growth)',
+    detail: 'Revenue and EPS expansion, ranked against size-matched peers.',
+  },
+  {
+    name: 'Profitability',
+    colour: 'var(--factor-profitability)',
+    detail: 'Return on equity and margin quality relative to the sector.',
+  },
+  {
+    name: 'Valuation',
+    colour: 'var(--factor-valuation)',
+    detail: 'What you pay per unit of earnings and book value.',
+  },
+  {
+    name: 'Quality',
+    colour: 'var(--factor-quality)',
+    detail: 'Leverage, liquidity and asset efficiency.',
+  },
+  {
+    name: 'Analyst',
+    colour: 'var(--factor-analyst)',
+    detail: 'Consensus positioning across covering analysts.',
+  },
+];
+
+const POPULAR = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM'];
 
 export default function Home() {
-  const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'search' | 'calendar'>('search');
-  const [ticker, setTicker] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [filteredTickers, setFilteredTickers] = useState<Array<{ symbol: string; category: string }>>([]);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Filter tickers based on input
-  useEffect(() => {
-    if (ticker.length === 0) {
-      setFilteredTickers([]);
-      setShowDropdown(false);
-      return;
-    }
-
-    const input = ticker.toUpperCase();
-    const matches: Array<{ symbol: string; category: string }> = [];
-
-    // Search through all tickers
-    Object.entries(RECOMMENDED_TICKERS).forEach(([category, symbols]) => {
-      symbols.forEach((symbol) => {
-        if (symbol.startsWith(input) || symbol.includes(input)) {
-          matches.push({ symbol, category });
-        }
-      });
-    });
-
-    // Limit to 8 results (not too many)
-    setFilteredTickers(matches.slice(0, 8));
-    setShowDropdown(matches.length > 0);
-  }, [ticker]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node) &&
-          inputRef.current && !inputRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const symbol = ticker.trim().toUpperCase();
-    if (symbol) {
-      router.push(`/ticker/${symbol}`);
-      setShowDropdown(false);
-    }
-  };
-
-  const handleTickerSelect = (symbol: string) => {
-    setTicker(symbol);
-    setShowDropdown(false);
-    router.push(`/ticker/${symbol}`);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 dark:text-white mb-4">
+    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
+      <main className="mx-auto w-full max-w-4xl px-4 pt-16 pb-24 sm:px-6 sm:pt-24">
+        <div className="ff-rise text-center">
+          <div
+            className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-[var(--radius-lg)] text-[17px] font-bold"
+            style={{ background: 'var(--accent)', color: '#fff', boxShadow: 'var(--shadow-md)' }}
+          >
+            F5
+          </div>
+
+          <h1
+            className="text-[38px] leading-[1.1] font-semibold tracking-tight sm:text-[52px]"
+            style={{ color: 'var(--text-primary)' }}
+          >
             FactorFive
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-300">
-            The intelligent 5-factor stock analysis engine
-          </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-            Powered by Finnhub API
+
+          <p
+            className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed sm:text-[17px]"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            Five-factor equity analysis, benchmarked against size-matched industry peers and the
+            market it actually trades in.
           </p>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex gap-2 bg-white dark:bg-gray-800 rounded-xl p-2 shadow-lg">
-            <button
-              onClick={() => setActiveTab('search')}
-              className={`px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
-                activeTab === 'search'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              🔍 Stock Analysis
-            </button>
-            <button
-              onClick={() => setActiveTab('calendar')}
-              className={`px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200 ${
-                activeTab === 'calendar'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              📅 Market Calendar
-            </button>
-          </div>
-        </div>
+        <div className="ff-rise mx-auto mt-9 max-w-xl" style={{ ['--delay' as string]: '80ms' }}>
+          <TickerSearch autoFocus />
 
-        {/* Tab Content */}
-        {activeTab === 'search' ? (
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 sm:p-12">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="relative">
-              <label 
-                htmlFor="ticker" 
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-1.5">
+            <span className="mr-1 text-[12.5px]" style={{ color: 'var(--text-tertiary)' }}>
+              Try
+            </span>
+            {POPULAR.map((s) => (
+              <Link
+                key={s}
+                href={`/ticker/${s}`}
+                className="rounded-[var(--radius-sm)] border px-2.5 py-1 text-[12.5px] font-medium transition-all hover:-translate-y-px"
+                style={{
+                  borderColor: 'var(--border)',
+                  color: 'var(--text-secondary)',
+                  background: 'var(--surface)',
+                }}
               >
-                Enter Stock Ticker
-              </label>
-              <input
-                ref={inputRef}
-                id="ticker"
-                type="text"
-                value={ticker}
-                onChange={(e) => setTicker(e.target.value)}
-                onFocus={() => ticker.length > 0 && filteredTickers.length > 0 && setShowDropdown(true)}
-                placeholder="e.g., AAPL, TSLA, MSFT"
-                className="w-full px-6 py-4 text-lg border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-all duration-200 outline-none"
-                required
-                maxLength={10}
-                autoComplete="off"
-                autoFocus
-              />
-              
-              {/* Recommended Tickers Dropdown */}
-              {showDropdown && filteredTickers.length > 0 && (
-                <div
-                  ref={dropdownRef}
-                  className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-xl shadow-2xl max-h-64 overflow-y-auto"
-                >
-                  {filteredTickers.map(({ symbol, category }) => (
-                    <button
-                      key={symbol}
-                      type="button"
-                      onClick={() => handleTickerSelect(symbol)}
-                      className="w-full px-6 py-3 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-150 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-gray-900 dark:text-white text-lg">
-                          {symbol}
-                        </span>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                          {category}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
+                {s}
+              </Link>
+            ))}
+          </div>
+
+          <p className="mt-4 text-center text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
+            Press <kbd
+              className="rounded border px-1.5 py-0.5 font-mono text-[11px]"
+              style={{ borderColor: 'var(--border-strong)', background: 'var(--bg-subtle)' }}
+            >/</kbd> anywhere to search
+          </p>
+        </div>
+
+        {/* The five factors */}
+        <div className="ff-rise mt-16" style={{ ['--delay' as string]: '160ms' }}>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {FACTORS.map((f, i) => (
+              <div
+                key={f.name}
+                className="ff-fade rounded-[var(--radius-lg)] border p-4 transition-transform hover:-translate-y-0.5"
+                style={{
+                  borderColor: 'var(--border)',
+                  background: 'var(--surface)',
+                  ['--delay' as string]: `${200 + i * 60}ms`,
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full" style={{ background: f.colour }} />
+                  <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {f.name}
+                  </h2>
+                  <span className="ml-auto text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>
+                    20 pts
+                  </span>
                 </div>
-              )}
-            </div>
+                <p className="mt-2 text-[13px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  {f.detail}
+                </p>
+              </div>
+            ))}
 
-            <button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 transform hover:scale-[1.02] focus:ring-4 focus:ring-blue-300 shadow-lg"
+            <div
+              className="ff-fade rounded-[var(--radius-lg)] border border-dashed p-4"
+              style={{ borderColor: 'var(--border-strong)', ['--delay' as string]: '500ms' }}
             >
-              Analyze Stock
-            </button>
-          </form>
-
-          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-3">
-              Popular stocks to try:
-            </p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {['AAPL', 'TSLA', 'MSFT', 'GOOGL', 'AMZN', 'NVDA'].map((symbol) => (
-                <button
-                  key={symbol}
-                  onClick={() => router.push(`/ticker/${symbol}`)}
-                  className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors duration-200"
-                >
-                  {symbol}
-                </button>
-              ))}
+              <h2 className="text-[14px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Every score shows its work
+              </h2>
+              <p className="mt-2 text-[13px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                Peer count, cohort quality and confidence sit next to the number. When the data is
+                thin, the app says so instead of guessing.
+              </p>
             </div>
           </div>
         </div>
 
-        <div className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
-          <p>
-            Real-time data including price, daily change, company profile,
-          </p>
-          <p>
-            upcoming earnings, and latest news from the past 14 days
-          </p>
+        {/* Market calendar */}
+        <div className="ff-rise mt-14" style={{ ['--delay' as string]: '240ms' }}>
+          <HomeTabs />
         </div>
-      </div>
-        ) : (
-          /* Market Calendar Tab */
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8">
-            <MarketCalendar />
-          </div>
-        )}
-      </div>
+
+        <footer
+          className="mt-16 border-t pt-6 text-center text-[12px]"
+          style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+        >
+          <p>Market data from Finnhub · News from NewsAPI</p>
+          <p className="mt-1">
+            For research and education. Not investment advice, and not a recommendation to buy or
+            sell any security.
+          </p>
+        </footer>
+      </main>
     </div>
   );
 }

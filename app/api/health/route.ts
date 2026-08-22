@@ -1,25 +1,22 @@
 /**
- * Health Check Endpoint - /api/health
- * 
- * vercel-ready: Endpoint to verify deployment and environment configuration
- * 
- * Returns:
- * - ok: true if API is responding
- * - status: 'healthy'
- * - timestamp: Current server time
- * - environment: NODE_ENV value
- * - env: Check if required environment variables are set (without exposing values)
+ * GET /api/health
+ *
+ * Deployment check plus live rate-limiter state. The limiter snapshot is the
+ * useful part in production: if peer data starts thinning out, this shows
+ * immediately whether the cause is an exhausted upstream window rather than
+ * leaving it to be inferred from degraded scores.
+ *
+ * Reports only whether keys are present, never their values.
  */
 
 import { NextResponse } from 'next/server';
+import { limiterSnapshot, memoSize, inFlightCount } from '@/lib/upstream';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  // vercel-ready: Check environment variables without exposing secrets
-  const hasNewsApiKey = !!process.env.NEWS_API_KEY;
-  const hasFinnhubKey = !!process.env.FINNHUB_KEY;
+  const limiters = limiterSnapshot();
 
   return NextResponse.json({
     ok: true,
@@ -28,8 +25,20 @@ export async function GET() {
     environment: process.env.NODE_ENV || 'development',
     vercel: process.env.VERCEL === '1',
     env: {
-      hasNewsApiKey,
-      hasFinnhubKey,
+      hasNewsApiKey: !!process.env.NEWS_API_KEY,
+      hasFinnhubKey: !!process.env.FINNHUB_KEY,
+    },
+    upstream: {
+      finnhub: {
+        ...limiters.finnhub,
+        resetInMs: Math.max(0, limiters.finnhub.resetAt - Date.now()),
+      },
+      news: {
+        ...limiters.news,
+        resetInMs: Math.max(0, limiters.news.resetAt - Date.now()),
+      },
+      memoEntries: memoSize(),
+      inFlight: inFlightCount(),
     },
   });
 }
