@@ -27,6 +27,7 @@ export async function GET() {
     env: {
       hasNewsApiKey: !!process.env.NEWS_API_KEY,
       hasFinnhubKey: !!process.env.FINNHUB_KEY,
+      hasFredKey: !!process.env.FRED_API_KEY,
     },
     upstream: {
       finnhub: {
@@ -36,6 +37,10 @@ export async function GET() {
       news: {
         ...limiters.news,
         resetInMs: Math.max(0, limiters.news.resetAt - Date.now()),
+      },
+      fred: {
+        ...limiters.fred,
+        resetInMs: Math.max(0, limiters.fred.resetAt - Date.now()),
       },
       memoEntries: memoSize(),
       inFlight: inFlightCount(),

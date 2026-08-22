@@ -177,19 +177,77 @@ spending a request per page view to be told "no" again.
 
 ## Market calendar
 
-`lib/marketCalendar.ts` derives events from agency release rules relative to
-today, so it cannot go stale. The previous version hardcoded 2025 dates,
-including two one-off "November 2025" overrides; every date it displayed was in
-the past.
+Every event is either **fetched from a source of record** or **computed from the
+rule that defines it**. Nothing is estimated.
 
-Events carry a `confidence` field. Only market holidays and the weekday-rule
-releases (Employment Situation, Consumer Sentiment, JOLTS) are exactly
-determined — those are `scheduled`. Everything else, **including FOMC**, follows
-the usual pattern but is marked `estimated` and links to the authoritative
-source. Do not present an estimated date as a scheduled one.
+### Fetched: macro releases
 
-Replacing the FOMC estimates with the Fed's published schedule is a worthwhile
-follow-up.
+`lib/fred.ts` pulls scheduled release dates from FRED, which publishes the
+statistical agencies' own calendars including dates that have not happened yet.
+A curated allowlist of 11 releases filters out the noise — FRED carries 331
+releases, most of them daily series updates, and querying `releases/dates`
+wholesale returns ~1,240 entries over 45 days.
+
+`include_release_dates_with_no_data=true` is the parameter that surfaces future
+dates; without it FRED returns only dates where data already exists, which makes
+the endpoint useless for a forward calendar.
+
+This replaced a rule-based generator, and the rules were wrong. Checked against
+FRED for September 2026:
+
+| Release | Rule predicted | Actual |
+|---|---|---|
+| CPI | Sep 14 | **Sep 11** |
+| PPI | Sep 15 | **Sep 10** |
+| Retail Sales | Sep 15 | **Sep 16** |
+| Non-Farm Payrolls | Sep 4 | Sep 4 ✓ |
+
+The PPI error is the instructive one: the rule assumed PPI always follows CPI,
+and that month it precedes it. A convention that holds most months is not a
+schedule.
+
+### Computed: market structure
+
+Holidays and options expirations are derived from the rule that *constitutes*
+them — Martin Luther King Jr. Day **is** the third Monday in January; monthly
+options expiration **is** the third Friday. These are definitions, not
+predictions, so computing them is exact. Weekend observance follows the NYSE
+rule (Saturday → preceding Friday, Sunday → following Monday), and Good Friday
+uses the anonymous Gregorian Easter algorithm.
+
+Quarterly expirations are labelled **triple** witching, not quadruple: the
+fourth leg was single-stock futures, which stopped trading in the US when
+OneChicago closed in 2020.
+
+### Deliberately absent: FOMC
+
+There is no free programmatic source for FOMC meeting dates. FRED's "FOMC Press
+Release" (release 101) returns *consecutive daily dates* — an artifact of how
+that series is tracked, not the meeting schedule. Rather than hardcode a list
+that silently goes stale, FOMC is omitted entirely.
+
+This is a real gap: FOMC is the highest-impact event on any market calendar. Two
+ways to close it, both requiring a decision rather than a default:
+
+- Maintain a short verified list from federalreserve.gov, stamped with a
+  `verifiedOn` date and hidden automatically once it ages past its horizon.
+- Take macro from a paid calendar feed that includes central-bank events.
+
+### Dates are strings, not `Date`
+
+`MarketEvent.date` is `YYYY-MM-DD`. `new Date('2026-09-11')` parses as UTC
+midnight, which renders as September 10th for anyone west of Greenwich — the
+most common way calendars go quietly wrong. Callers build a local-time `Date`
+through `toLocalDate()` when they need one.
+
+### Rendering
+
+Events are fetched on the server (the FRED key must not reach the browser) and
+passed to the client component as props, streaming behind a Suspense boundary so
+the hero does not block on them. The component indexes events into a
+`Map<'YYYY-MM-DD', MarketEvent[]>` once per event set; the previous version
+filtered the whole array inside the grid map, a linear scan repeated 42 times
+per render.
 
 ## Verifying
 

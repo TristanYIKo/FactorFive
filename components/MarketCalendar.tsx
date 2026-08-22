@@ -3,67 +3,69 @@
 /**
  * Market calendar.
  *
- * Events come from lib/marketCalendar.ts, which derives them from agency
- * release rules relative to today rather than a hardcoded list. Dates that
- * follow a firm rule are labelled "scheduled"; ones that follow the usual
- * pattern but should be confirmed are labelled "estimated" and link to the
- * authoritative source. The previous UI presented a hardcoded 2025 list with
- * no such distinction.
+ * Presentational only. Events are fetched on the server and passed in, because
+ * macro release dates now come from FRED and the API key must not reach the
+ * browser.
+ *
+ * Every event displays its provenance — the agency that publishes it, or the
+ * rule that defines it. Nothing on this calendar is inferred, so nothing needs
+ * an "estimated" caveat.
  */
 
 import { useMemo, useState } from 'react';
 import {
-  generateMarketCalendar,
-  getEventsForDate,
+  indexByDate,
+  dateKey,
+  toLocalDate,
   type MarketEvent,
 } from '@/lib/marketCalendar';
 
 const CATEGORY_COLOUR: Record<MarketEvent['category'], string> = {
-  FOMC: 'var(--factor-quality)',
   'Economic Data': 'var(--factor-growth)',
-  'Earnings Season': 'var(--factor-profitability)',
+  'Market Structure': 'var(--factor-quality)',
   Holiday: 'var(--neutral)',
-  Other: 'var(--neutral)',
 };
 
 const IMPACT_TONE: Record<MarketEvent['impact'], string> = {
-  High: 'var(--negative)',
-  Medium: 'var(--warning)',
-  Low: 'var(--neutral)',
+  high: 'var(--negative)',
+  medium: 'var(--warning)',
+  low: 'var(--neutral)',
+};
+
+const IMPACT_LABEL: Record<MarketEvent['impact'], string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
 };
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-function sameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+function sourceLabel(source: MarketEvent['source']): string {
+  return source.kind === 'published'
+    ? `${source.agency}, via ${source.via}`
+    : source.rule;
 }
 
-export default function MarketCalendar() {
-  const events = useMemo(() => generateMarketCalendar(), []);
+export default function MarketCalendar({ events }: { events: MarketEvent[] }) {
   const [view, setView] = useState<'upcoming' | 'month'>('upcoming');
   const [cursor, setCursor] = useState(() => new Date());
-  const [selected, setSelected] = useState<Date | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
+  const today = useMemo(() => dateKey(new Date()), []);
+
+  // Indexed once per event-set, not once per cell. The previous version filtered
+  // the full array inside the grid map: 42 linear scans on every render.
+  const byDate = useMemo(() => indexByDate(events), [events]);
 
   const upcoming = useMemo(
-    () => events.filter((e) => e.date >= today).slice(0, 12),
+    () => events.filter((e) => e.date >= today).slice(0, 14),
     [events, today]
   );
 
   const monthGrid = useMemo(() => {
     const year = cursor.getFullYear();
     const month = cursor.getMonth();
-    const first = new Date(year, month, 1);
-    const startPad = first.getDay();
+    const startPad = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const cells: Array<Date | null> = [];
@@ -72,7 +74,24 @@ export default function MarketCalendar() {
     return cells;
   }, [cursor]);
 
-  const selectedEvents = selected ? getEventsForDate(events, selected) : [];
+  const selectedEvents = selected ? (byDate.get(selected) ?? []) : [];
+
+  if (events.length === 0) {
+    return (
+      <section
+        className="rounded-[var(--radius-lg)] border p-6"
+        style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+      >
+        <h2 className="text-[15px] font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Market calendar
+        </h2>
+        <p className="mt-2 text-[13px]" style={{ color: 'var(--text-tertiary)' }}>
+          No events could be loaded. Macro release dates come from FRED, so this is usually a
+          missing or rejected <code>FRED_API_KEY</code>.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <section
@@ -88,7 +107,7 @@ export default function MarketCalendar() {
             Market calendar
           </h2>
           <p className="mt-0.5 text-[12.5px]" style={{ color: 'var(--text-tertiary)' }}>
-            Fed decisions, economic releases and market holidays
+            Scheduled economic releases, market holidays and options expirations
           </p>
         </div>
 
@@ -115,77 +134,65 @@ export default function MarketCalendar() {
 
       {view === 'upcoming' ? (
         <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>
-          {upcoming.map((event, i) => (
-            <li
-              key={event.id}
-              className="ff-fade flex items-start gap-4 px-5 py-3.5"
-              style={{ ['--delay' as string]: `${i * 40}ms` }}
-            >
-              <div className="w-12 shrink-0 text-center">
-                <div
-                  className="text-[10.5px] font-medium uppercase tracking-wide"
-                  style={{ color: 'var(--text-tertiary)' }}
-                >
-                  {event.date.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}
-                </div>
-                <div className="tabular text-[19px] leading-tight font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  {event.date.getUTCDate()}
-                </div>
-              </div>
-
-              <span
-                className="mt-2 h-2 w-2 shrink-0 rounded-full"
-                style={{ background: CATEGORY_COLOUR[event.category] }}
-              />
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                  <span className="text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {event.title}
-                  </span>
-                  <span
-                    className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                    style={{
-                      color: IMPACT_TONE[event.impact],
-                      background: `color-mix(in srgb, ${IMPACT_TONE[event.impact]} 13%, transparent)`,
-                    }}
+          {upcoming.map((event, i) => {
+            const d = toLocalDate(event.date);
+            return (
+              <li
+                key={event.id}
+                className="ff-fade flex items-start gap-4 px-5 py-3.5"
+                style={{ ['--delay' as string]: `${Math.min(i, 10) * 40}ms` }}
+              >
+                <div className="w-12 shrink-0 text-center">
+                  <div
+                    className="text-[10.5px] font-medium uppercase tracking-wide"
+                    style={{ color: 'var(--text-tertiary)' }}
                   >
-                    {event.impact}
-                  </span>
-                  {event.confidence === 'estimated' && (
+                    {d.toLocaleDateString('en-US', { month: 'short' })}
+                  </div>
+                  <div
+                    className="tabular text-[19px] leading-tight font-semibold"
+                    style={{ color: 'var(--text-primary)' }}
+                  >
+                    {d.getDate()}
+                  </div>
+                </div>
+
+                <span
+                  className="mt-2 h-2 w-2 shrink-0 rounded-full"
+                  style={{ background: CATEGORY_COLOUR[event.category] }}
+                />
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[14px] font-medium" style={{ color: 'var(--text-primary)' }}>
+                      {event.title}
+                    </span>
                     <span
-                      className="text-[10.5px]"
-                      style={{ color: 'var(--text-tertiary)' }}
-                      title="Follows the usual release pattern; confirm the exact date with the source."
+                      className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                      style={{
+                        color: IMPACT_TONE[event.impact],
+                        background: `color-mix(in srgb, ${IMPACT_TONE[event.impact]} 13%, transparent)`,
+                      }}
                     >
-                      estimated
+                      {IMPACT_LABEL[event.impact]}
                     </span>
-                  )}
+                  </div>
+                  <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
+                    {event.description}
+                  </p>
+                  <a
+                    href={event.source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-block text-[11.5px] underline-offset-2 hover:underline"
+                    style={{ color: 'var(--text-tertiary)' }}
+                  >
+                    {sourceLabel(event.source)}
+                  </a>
                 </div>
-                <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
-                  {event.description}
-                </p>
-                <div className="mt-1 flex items-center gap-3">
-                  {event.time && (
-                    <span className="tabular text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>
-                      {event.time}
-                    </span>
-                  )}
-                  {event.source && (
-                    <a
-                      href={event.source}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11.5px] underline-offset-2 hover:underline"
-                      style={{ color: 'var(--accent-text)' }}
-                    >
-                      source
-                    </a>
-                  )}
-                </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <div className="p-5">
@@ -224,14 +231,15 @@ export default function MarketCalendar() {
 
             {monthGrid.map((day, i) => {
               if (!day) return <div key={`pad-${i}`} />;
-              const dayEvents = getEventsForDate(events, day);
-              const isToday = sameDay(day, today);
-              const isSelected = selected && sameDay(day, selected);
+              const key = dateKey(day);
+              const dayEvents = byDate.get(key) ?? [];
+              const isToday = key === today;
+              const isSelected = key === selected;
 
               return (
                 <button
-                  key={day.toISOString()}
-                  onClick={() => setSelected(isSelected ? null : day)}
+                  key={key}
+                  onClick={() => setSelected(isSelected ? null : key)}
                   className="relative aspect-square rounded-[var(--radius-sm)] border p-1 text-[12.5px] transition-all hover:-translate-y-px"
                   style={{
                     borderColor: isSelected ? 'var(--accent)' : 'transparent',
@@ -260,14 +268,18 @@ export default function MarketCalendar() {
           {selected && (
             <div className="ff-fade mt-4 border-t pt-4" style={{ borderColor: 'var(--border)' }}>
               <h3 className="mb-2 text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>
-                {selected.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                {toLocalDate(selected).toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  month: 'long',
+                  day: 'numeric',
+                })}
               </h3>
               {selectedEvents.length === 0 ? (
                 <p className="text-[13px]" style={{ color: 'var(--text-tertiary)' }}>
                   No scheduled events.
                 </p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-2.5">
                   {selectedEvents.map((e) => (
                     <li key={e.id} className="flex items-start gap-2.5">
                       <span
@@ -277,15 +289,19 @@ export default function MarketCalendar() {
                       <div>
                         <p className="text-[13px] font-medium" style={{ color: 'var(--text-primary)' }}>
                           {e.title}
-                          {e.time && (
-                            <span className="tabular ml-2 font-normal" style={{ color: 'var(--text-tertiary)' }}>
-                              {e.time}
-                            </span>
-                          )}
                         </p>
                         <p className="text-[12.5px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
                           {e.description}
                         </p>
+                        <a
+                          href={e.source.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-0.5 inline-block text-[11.5px] underline-offset-2 hover:underline"
+                          style={{ color: 'var(--text-tertiary)' }}
+                        >
+                          {sourceLabel(e.source)}
+                        </a>
                       </div>
                     </li>
                   ))}
@@ -295,6 +311,14 @@ export default function MarketCalendar() {
           )}
         </div>
       )}
+
+      <footer
+        className="border-t px-5 py-3 text-[11.5px]"
+        style={{ borderColor: 'var(--border)', color: 'var(--text-tertiary)' }}
+      >
+        Economic release dates published by the source agencies via FRED. Holidays and options
+        expirations computed from the exchange rules that define them. No dates are estimated.
+      </footer>
     </section>
   );
 }
