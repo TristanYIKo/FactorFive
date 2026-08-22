@@ -45,10 +45,14 @@ Create `.env.local` with your own keys — the file is gitignored:
 ```
 FINNHUB_KEY=your_finnhub_key
 NEWS_API_KEY=your_newsapi_key
+FRED_API_KEY=your_fred_key
 ```
 
-Get them free from [finnhub.io](https://finnhub.io/dashboard) and
-[newsapi.org](https://newsapi.org/account). Then:
+Get them free from [finnhub.io](https://finnhub.io/dashboard),
+[newsapi.org](https://newsapi.org/account) and
+[fredaccount.stlouisfed.org](https://fredaccount.stlouisfed.org/apikeys). FRED
+supplies the market calendar's economic release dates; without it the calendar
+shows only holidays and options expirations. Then:
 
 ```bash
 npm run dev

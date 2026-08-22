@@ -6,9 +6,11 @@
  * large `'use client'` component, so the whole thing shipped as JavaScript.
  */
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { TickerSearch } from '@/components/TickerSearch';
-import { HomeTabs } from '@/components/HomeTabs';
+import MarketCalendar from '@/components/MarketCalendar';
+import { getMarketCalendar } from '@/lib/marketCalendar';
 
 const FACTORS = [
   {
@@ -37,6 +39,17 @@ const FACTORS = [
     detail: 'Consensus positioning across covering analysts.',
   },
 ];
+
+/**
+ * Regenerate hourly.
+ *
+ * Without this the route is fully static, so the calendar is baked in at build
+ * time and frozen there — the "upcoming" list would keep showing the same dates
+ * as they slid into the past, and a newly added FRED key would not take effect
+ * until the next deploy. An hour is far finer than the data moves (agencies
+ * publish schedules months ahead) while keeping the window rolling.
+ */
+export const revalidate = 3600;
 
 const POPULAR = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM'];
 
@@ -142,9 +155,12 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Market calendar */}
+        {/* Market calendar. Streams in behind the hero rather than blocking it,
+            since the macro dates are fetched from FRED on the server. */}
         <div className="ff-rise mt-14" style={{ ['--delay' as string]: '240ms' }}>
-          <HomeTabs />
+          <Suspense fallback={<CalendarSkeleton />}>
+            <CalendarSection />
+          </Suspense>
         </div>
 
         <footer
@@ -158,6 +174,43 @@ export default function Home() {
           </p>
         </footer>
       </main>
+    </div>
+  );
+}
+
+/** Fetches on the server so FRED_API_KEY never reaches the browser. */
+async function CalendarSection() {
+  const { events, macro } = await getMarketCalendar();
+  return <MarketCalendar events={events} macro={macro} />;
+}
+
+function CalendarSkeleton() {
+  return (
+    <div
+      className="rounded-[var(--radius-lg)] border"
+      style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+    >
+      <div
+        className="flex items-center justify-between border-b px-5 py-4"
+        style={{ borderColor: 'var(--border)' }}
+      >
+        <div className="space-y-2">
+          <div className="ff-skeleton h-4 w-36" />
+          <div className="ff-skeleton h-3 w-64" />
+        </div>
+        <div className="ff-skeleton h-8 w-40 rounded-[var(--radius-md)]" />
+      </div>
+      <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex items-start gap-4 px-5 py-3.5">
+            <div className="ff-skeleton h-9 w-12" />
+            <div className="flex-1 space-y-2">
+              <div className="ff-skeleton h-3.5 w-48" />
+              <div className="ff-skeleton h-3 w-full max-w-md" />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

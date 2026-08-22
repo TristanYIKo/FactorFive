@@ -253,14 +253,26 @@ const finnhubWindow = new RateWindow(60, 60_000, 6);
 /** NewsAPI free tier is a 100/day quota; pace it and reserve nothing. */
 const newsWindow = new RateWindow(50, 60_000, 0);
 
+/**
+ * FRED allows 120 requests/minute, which is generous relative to what the
+ * calendar needs (about a dozen calls per refresh, cached for hours). Sits well
+ * under the published cap.
+ */
+const fredWindow = new RateWindow(100, 60_000, 0);
+
 const windows: Record<string, RateWindow> = {
   finnhub: finnhubWindow,
   news: newsWindow,
+  fred: fredWindow,
 };
 
 /** Exposed for /api/health so limiter state is observable in production. */
 export function limiterSnapshot() {
-  return { finnhub: finnhubWindow.snapshot(), news: newsWindow.snapshot() };
+  return {
+    finnhub: finnhubWindow.snapshot(),
+    news: newsWindow.snapshot(),
+    fred: fredWindow.snapshot(),
+  };
 }
 
 /** In-flight request coalescing, keyed by cache key. */
@@ -353,7 +365,7 @@ function sleep(ms: number): Promise<void> {
 
 export interface UpstreamOptions {
   /** Which provider's rate window to draw from. */
-  provider: 'finnhub' | 'news';
+  provider: 'finnhub' | 'news' | 'fred';
   /** Seconds Next should cache this response. 0 disables caching. */
   revalidate: number;
   /** Per-attempt timeout. */
