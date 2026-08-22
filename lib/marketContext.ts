@@ -20,7 +20,7 @@
  * NOTE ON SCOPE: this is market and risk context, not macroeconomics. True
  * macro series - CPI, fed funds, the yield curve, unemployment - are not
  * available from Finnhub's free tier. Adding FRED (free, one key) would slot
- * in here cleanly; see docs/MARKET_CONTEXT.md.
+ * in here cleanly; see docs/ARCHITECTURE.md.
  */
 
 import type { FinnhubBasicFinancials, FinnhubQuote } from '@/types/stock';
@@ -226,15 +226,31 @@ export function buildRiskProfile(
   };
 }
 
+/**
+ * Beta bands, defined once.
+ *
+ * These were previously inlined at three call sites with two different
+ * thresholds, so a stock at beta 1.23 was labelled "tracks market" in the stat
+ * block and "amplifies index moves" in the insight directly beneath it.
+ */
+export const BETA_AMPLIFIES = 1.2;
+export const BETA_DAMPENS = 0.8;
+
+export function describeBeta(beta: number): 'amplifies market' | 'dampens market' | 'tracks market' {
+  if (beta > BETA_AMPLIFIES) return 'amplifies market';
+  if (beta < BETA_DAMPENS) return 'dampens market';
+  return 'tracks market';
+}
+
 function describeRisk(beta?: number, volatility?: number): string {
   if (beta === undefined && volatility === undefined) return 'Risk profile unavailable';
 
   const betaPart =
     beta === undefined
       ? ''
-      : beta > 1.3
+      : beta > BETA_AMPLIFIES
         ? `amplifies market moves (beta ${beta.toFixed(2)})`
-        : beta < 0.8
+        : beta < BETA_DAMPENS
           ? `dampens market moves (beta ${beta.toFixed(2)})`
           : `tracks the market closely (beta ${beta.toFixed(2)})`;
 
@@ -326,7 +342,7 @@ export function buildInsights(
   }
 
   const m = financials?.metric;
-  if (m?.beta !== undefined && regime.return52W !== undefined && m.beta > 1.2) {
+  if (m?.beta !== undefined && regime.return52W !== undefined && m.beta > BETA_AMPLIFIES) {
     insights.push(
       `With a beta of ${m.beta.toFixed(2)}, this name amplifies index moves in both directions - relevant in a market the model reads as "${regime.label.toLowerCase()}".`
     );

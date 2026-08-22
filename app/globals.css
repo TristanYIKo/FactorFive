@@ -1,71 +1,356 @@
 @import "tailwindcss";
 
+/* ==========================================================================
+   FactorFive design tokens
+
+   One source of truth for colour, type, spacing, depth and motion. Everything
+   below is defined on :root in the light palette, then re-declared for dark.
+   Components reference tokens only - no hard-coded hex values in TSX.
+   ========================================================================== */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* --- surfaces: ascending elevation ---------------------------------- */
+  --bg-base: #fbfbfd;
+  --bg-subtle: #f4f4f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+
+  /* --- text ------------------------------------------------------------ */
+  --text-primary: #0b0d12;
+  --text-secondary: #4a5061;
+  --text-tertiary: #767d90;
+  --text-inverse: #ffffff;
+
+  /* --- lines ----------------------------------------------------------- */
+  --border: #e4e5ec;
+  --border-strong: #d0d2dc;
+
+  /* --- brand ----------------------------------------------------------- */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: rgba(79, 70, 229, 0.1);
+  --accent-text: #4338ca;
+
+  /* --- semantics ------------------------------------------------------- */
+  --positive: #077d55;
+  --positive-soft: rgba(7, 125, 85, 0.1);
+  --negative: #c8332f;
+  --negative-soft: rgba(200, 51, 47, 0.1);
+  --warning: #a16207;
+  --warning-soft: rgba(161, 98, 7, 0.1);
+  --neutral: #5b6170;
+  --neutral-soft: rgba(91, 97, 112, 0.09);
+
+  /* --- the five factors, each with a stable identity ------------------- */
+  --factor-growth: #2563eb;
+  --factor-profitability: #059669;
+  --factor-valuation: #d97706;
+  --factor-quality: #7c3aed;
+  --factor-analyst: #db2777;
+
+  /* --- depth ----------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(11, 13, 18, 0.05);
+  --shadow-md: 0 2px 4px rgba(11, 13, 18, 0.05), 0 4px 12px rgba(11, 13, 18, 0.05);
+  --shadow-lg: 0 4px 8px rgba(11, 13, 18, 0.05), 0 12px 32px rgba(11, 13, 18, 0.08);
+
+  /* --- radii ----------------------------------------------------------- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* --- motion ---------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 420ms;
 }
 
+/* Dark palette. Guarded so an explicit light choice always wins, and applied
+   both to the system default and to an explicit dark selection. */
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    --bg-base: #08090c;
+    --bg-subtle: #0d0f14;
+    --surface: #111319;
+    --surface-raised: #161922;
+    --surface-overlay: #1b1f2a;
+
+    --text-primary: #f2f3f7;
+    --text-secondary: #a4aab9;
+    --text-tertiary: #6f7688;
+    --text-inverse: #08090c;
+
+    --border: #23262f;
+    --border-strong: #33384a;
+
+    --accent: #7c74ff;
+    --accent-hover: #918bff;
+    --accent-soft: rgba(124, 116, 255, 0.14);
+    --accent-text: #a5a0ff;
+
+    --positive: #2ecc8f;
+    --positive-soft: rgba(46, 204, 143, 0.13);
+    --negative: #ff6b64;
+    --negative-soft: rgba(255, 107, 100, 0.13);
+    --warning: #f0b34a;
+    --warning-soft: rgba(240, 179, 74, 0.13);
+    --neutral: #8b92a3;
+    --neutral-soft: rgba(139, 146, 163, 0.12);
+
+    --factor-growth: #5b9dff;
+    --factor-profitability: #2ecc8f;
+    --factor-valuation: #f0b34a;
+    --factor-quality: #a78bfa;
+    --factor-analyst: #f472b6;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg-base: #08090c;
+  --bg-subtle: #0d0f14;
+  --surface: #111319;
+  --surface-raised: #161922;
+  --surface-overlay: #1b1f2a;
+
+  --text-primary: #f2f3f7;
+  --text-secondary: #a4aab9;
+  --text-tertiary: #6f7688;
+  --text-inverse: #08090c;
+
+  --border: #23262f;
+  --border-strong: #33384a;
+
+  --accent: #7c74ff;
+  --accent-hover: #918bff;
+  --accent-soft: rgba(124, 116, 255, 0.14);
+  --accent-text: #a5a0ff;
+
+  --positive: #2ecc8f;
+  --positive-soft: rgba(46, 204, 143, 0.13);
+  --negative: #ff6b64;
+  --negative-soft: rgba(255, 107, 100, 0.13);
+  --warning: #f0b34a;
+  --warning-soft: rgba(240, 179, 74, 0.13);
+  --neutral: #8b92a3;
+  --neutral-soft: rgba(139, 146, 163, 0.12);
+
+  --factor-growth: #5b9dff;
+  --factor-profitability: #2ecc8f;
+  --factor-valuation: #f0b34a;
+  --factor-quality: #a78bfa;
+  --factor-analyst: #f472b6;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* Expose tokens to Tailwind utilities (bg-surface, text-secondary, ...). */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg-base: var(--bg-base);
+  --color-bg-subtle: var(--bg-subtle);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-overlay: var(--surface-overlay);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-neutral: var(--neutral);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.55;
 }
 
-/* Prevent text cursor/caret from appearing on non-input elements */
-* {
-  -webkit-user-select: none; /* Safari */
-  -moz-user-select: none; /* Firefox */
-  -ms-user-select: none; /* IE10+/Edge */
-  user-select: none; /* Standard */
-  cursor: default;
+/* Numbers in tables and metrics must not jitter as they update. The previous
+   stylesheet also set `user-select: none` on every element, which meant a
+   visitor could not copy a ticker, a price, or a headline. That is removed;
+   selection is the browser default again, suppressed only on controls where
+   drag-selecting the label is just noise. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
-/* Allow text selection in input fields and editable content */
-input,
-textarea,
-[contenteditable="true"],
-.selectable {
-  -webkit-user-select: text;
-  -moz-user-select: text;
-  -ms-user-select: text;
-  user-select: text;
-  cursor: text;
-}
-
-/* Allow selection for code blocks and pre-formatted text that users might want to copy */
-code,
-pre {
-  -webkit-user-select: text;
-  -moz-user-select: text;
-  -ms-user-select: text;
-  user-select: text;
-  cursor: text;
-}
-
-/* Restore pointer cursor for interactive elements */
-a,
 button,
 [role="button"],
-.cursor-pointer,
-.cursor-help {
-  cursor: pointer !important;
+label {
+  user-select: none;
 }
 
-/* Keep help cursor for elements that have explanatory tooltips */
-.cursor-help {
-  cursor: help !important;
+button {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   Motion
+   Entrances are staggered by the components that use them via --delay.
+   ========================================================================== */
+
+@keyframes ff-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ff-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ff-shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes ff-grow-x {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.ff-rise {
+  animation: ff-rise var(--dur-slow) var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+.ff-fade {
+  animation: ff-fade var(--dur-base) var(--ease-out) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* Skeleton placeholder. Shape-matched to the real content so the layout does
+   not shift when data lands. */
+.ff-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-subtle) 25%,
+    var(--border) 37%,
+    var(--bg-subtle) 63%
+  );
+  background-size: 200% 100%;
+  animation: ff-shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* Respect the OS setting. Everything still lands in its final state. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   Scrollbars
+   ========================================================================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+  background-clip: content-box;
 }

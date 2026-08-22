@@ -1,63 +1,69 @@
 /**
- * Loading state for ticker pages
- * Displayed while fetching stock data from API
+ * Route-level loading state, shown while Next resolves the server component
+ * during a client-side navigation. The page itself also has a Suspense
+ * boundary for streaming; this covers the transition before that begins.
  */
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="animate-pulse">
-          {/* Back button skeleton */}
-          <div className="h-6 bg-gray-300 dark:bg-gray-700 rounded w-32 mb-6"></div>
-          
-          {/* Profile header skeleton */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
-            <div className="flex items-start gap-4 mb-4">
-              <div className="w-16 h-16 bg-gray-300 dark:bg-gray-700 rounded-lg"></div>
-              <div className="flex-1">
-                <div className="h-8 bg-gray-300 dark:bg-gray-700 rounded w-64 mb-2"></div>
-                <div className="h-6 bg-gray-300 dark:bg-gray-700 rounded w-40"></div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i}>
-                  <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-20 mb-2"></div>
-                  <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-24"></div>
-                </div>
-              ))}
-            </div>
+    <div className="min-h-screen" style={{ background: 'var(--bg-base)' }}>
+      <div
+        className="sticky top-0 z-30 border-b"
+        style={{ borderColor: 'var(--border)', background: 'var(--bg-base)' }}
+      >
+        <div className="mx-auto flex w-full max-w-5xl items-center gap-4 px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2">
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[12px] font-bold"
+              style={{ background: 'var(--accent)', color: '#fff' }}
+            >
+              F5
+            </span>
+            <span
+              className="hidden text-[15px] font-semibold tracking-tight sm:inline"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              FactorFive
+            </span>
           </div>
+          <div className="ff-skeleton ml-auto h-9 w-full max-w-sm rounded-[var(--radius-lg)]" />
+        </div>
+      </div>
 
-          {/* Price and score panels skeleton */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div className="lg:col-span-1 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-              <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-32 mb-4"></div>
-              <div className="h-10 bg-gray-300 dark:bg-gray-700 rounded w-40 mb-4"></div>
-              <div className="h-6 bg-gray-300 dark:bg-gray-700 rounded w-32"></div>
-            </div>
-            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-              <div className="h-6 bg-gray-300 dark:bg-gray-700 rounded w-32 mb-4"></div>
-              <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-full mb-2"></div>
-              <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
-            </div>
-          </div>
-
-          {/* News skeleton */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-            <div className="h-6 bg-gray-300 dark:bg-gray-700 rounded w-32 mb-4"></div>
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
-                  <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-full mb-2"></div>
-                  <div className="h-4 bg-gray-300 dark:bg-gray-700 rounded w-5/6 mb-2"></div>
-                  <div className="h-3 bg-gray-300 dark:bg-gray-700 rounded w-32"></div>
-                </div>
-              ))}
+      <main className="mx-auto w-full max-w-5xl space-y-5 px-4 pt-6 pb-20 sm:px-6">
+        <div
+          className="rounded-[var(--radius-lg)] border p-5 sm:p-6"
+          style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+        >
+          <div className="flex items-start gap-4">
+            <div className="ff-skeleton h-13 w-13 rounded-[var(--radius-md)]" style={{ height: 52, width: 52 }} />
+            <div className="flex-1 space-y-2">
+              <div className="ff-skeleton h-6 w-56" />
+              <div className="ff-skeleton h-3.5 w-40" />
             </div>
           </div>
         </div>
-      </div>
+
+        <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr]">
+          <div
+            className="rounded-[var(--radius-lg)] border p-5 sm:p-6"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <div className="ff-skeleton mb-5 h-4 w-40" />
+            <div className="ff-skeleton mx-auto h-44 w-44 rounded-full" />
+          </div>
+          <div
+            className="rounded-[var(--radius-lg)] border p-5 sm:p-6"
+            style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <div className="ff-skeleton mb-4 h-4 w-32" />
+            <div className="space-y-2.5">
+              <div className="ff-skeleton h-3 w-full" />
+              <div className="ff-skeleton h-3 w-11/12" />
+              <div className="ff-skeleton h-3 w-4/5" />
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

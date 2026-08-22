@@ -72,12 +72,37 @@ function getOptional<T>(
   path: string,
   params: Record<string, string>,
   revalidate: number,
-  fallback: T
+  fallback: T,
+  extra?: { priority?: 'high' | 'low'; deadlineAt?: number; retries?: number }
 ) {
   return upstreamJsonOptional<T>(
     url(path, params),
-    { provider: 'finnhub', revalidate, key: cacheKey(path, params) },
+    { provider: 'finnhub', revalidate, key: cacheKey(path, params), ...extra },
     fallback
+  );
+}
+
+/**
+ * Peer fundamentals, fetched at LOW priority.
+ *
+ * These are enrichment: the page renders a price, a profile and a score
+ * without them. Yielding the rate-limit budget to page-critical calls keeps
+ * the headline number fast for everyone when several cold symbols are being
+ * analysed at once.
+ */
+function peerMetric(symbol: string, deadlineAt: number) {
+  return getOptional<FinnhubBasicFinancials | null>(
+    '/stock/metric',
+    { symbol, metric: 'all' },
+    TTL.metric,
+    null,
+    // retries: 0 is deliberate. When rate-limit budget is the scarce resource,
+    // spending three of it re-asking for one peer is strictly worse than
+    // spending it on three different peers - the benchmark only needs a
+    // representative sample, not any particular company. With the default of
+    // two retries, a cold five-symbol fill burned 49 requests to resolve
+    // roughly sixteen peers and never finished populating the cache.
+    { priority: 'low', deadlineAt, retries: 0 }
   );
 }
 
@@ -136,7 +161,18 @@ export interface PeerMetricsResult {
 export const MIN_PEERS_FOR_BENCHMARK = 4;
 
 /** How many peers to pull metrics for. */
-const PEER_LIMIT = 12;
+const PEER_LIMIT = 8;
+
+/**
+ * Stop waiting for peer metrics after this long and score with whatever
+ * arrived, marked as degraded.
+ *
+ * At 60 requests/minute a fully cold cohort can take longer than anyone will
+ * wait. Bounding it keeps the page responsive and, critically, makes the
+ * shortfall visible in dataQuality rather than silently thinning the
+ * benchmark - which is the exact failure this rebuild set out to remove.
+ */
+const PEER_DEADLINE_MS = 6000;
 
 /**
  * Peers below this market cap (millions USD) are excluded outright.
@@ -243,9 +279,16 @@ export async function fetchPeerMetrics(
     };
   }
 
+  // The deadline is handed to the limiter rather than raced against it. A peer
+  // that is still queued when time runs out releases its slot and spends none
+  // of the window's budget; racing a timeout instead left the request queued,
+  // so it went on to consume a request nobody was waiting for and starved the
+  // next visitor's page-critical calls.
+  const deadlineAt = Date.now() + PEER_DEADLINE_MS;
+
   const settled = await Promise.all(
     candidates.map(async (peerSymbol) => {
-      const res = await finnhub.metric(peerSymbol);
+      const res = await peerMetric(peerSymbol, deadlineAt);
       if (!res.ok || !res.data?.metric) return null;
 
       const m = res.data.metric;
@@ -280,7 +323,10 @@ export async function fetchPeerMetrics(
   const complete = cohort.length >= MIN_PEERS_FOR_BENCHMARK;
 
   const notes: string[] = [];
-  if (fetchFailures > 0) notes.push(`${fetchFailures} peer fetches failed`);
+  // Covers both a genuine fetch failure and a peer still queued for rate-limit
+  // budget when the deadline fired; from the reader's point of view the
+  // consequence is the same and the wording should not overclaim which it was.
+  if (fetchFailures > 0) notes.push(`${fetchFailures} did not resolve in time`);
   if (excludedForSize > 0) notes.push(`${excludedForSize} excluded as size-inappropriate`);
 
   return {
