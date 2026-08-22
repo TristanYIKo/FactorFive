@@ -1,15 +1,27 @@
 /**
- * Intelligent Stock Scoring Engine
- * 
- * Context-aware scoring system that uses relative analysis and industry comparisons
- * rather than absolute thresholds. Scores are normalized using z-scores and percentile
- * rankings against peer companies in the same industry.
- * 
- * Each component (Growth, Profitability, Valuation, Momentum, Analyst) is scored 0-20
- * based on how the company compares to:
- * 1. Its own historical performance (3-5 year trends)
- * 2. Industry/sector peers (median and distribution)
- * 3. Broader market benchmarks where applicable
+ * FactorFive scoring engine.
+ *
+ * Five factors, 20 points each, summing to 0-100:
+ *   Growth, Profitability, Valuation, Quality, Analyst.
+ *
+ * Two changes from the previous engine matter most.
+ *
+ * 1. ROBUST BENCHMARKS. Peers are summarised by median and MAD with winsorized
+ *    tails rather than mean and standard deviation. Finnhub peer lists contain
+ *    unvetted micro-caps; on AAPL the old mean-based benchmark reported 149%
+ *    "average" industry revenue growth and -20% net margin, which scored Apple
+ *    3/20 on growth. See lib/stats.ts.
+ *
+ * 2. HONEST DEGRADATION. When peer data is missing the engine no longer
+ *    invents a comparison. Previously an empty peer set produced z-score 0 for
+ *    every factor, which the sigmoid mapped to exactly half marks, so any
+ *    rate-limited request silently returned ~50/100 while the UI claimed a
+ *    full peer analysis. Factors that cannot be computed against peers now
+ *    fall back to absolute thresholds and are reported at lower confidence.
+ *
+ * The old "compound excellence multiplier" (up to +15 on the total, stacked on
+ * an already-amplified sigmoid) is gone. Three multiplicative amplifiers made
+ * the output bimodal and unstable; one calibrated curve is more informative.
  */
 
 import type {
@@ -19,723 +31,352 @@ import type {
   FinnhubPriceTarget,
   PeerMetrics,
   IndustryBenchmarks,
+  MetricDistribution,
   ScoreBreakdown,
 } from '@/types/stock';
+import type { PeerMetricsResult } from '@/lib/finnhub';
+import {
+  describe,
+  robustZScore,
+  percentileRank,
+  zScoreToPoints,
+  zScoreToPointsInverted,
+  absoluteFraction,
+  clampSane,
+  clean,
+  SANE_RANGES,
+} from '@/lib/stats';
 
-/**
- * Calculate z-score for a value within a dataset
- * Z-score represents how many standard deviations a value is from the mean
- */
-function calculateZScore(value: number, mean: number, stdDev: number): number {
-  if (stdDev === 0) return 0;
-  return (value - mean) / stdDev;
+/** One factor's result. */
+interface FactorResult {
+  score: number;
+  detail: string;
+  tooltip: string;
+  percentile: number | null;
+  /** True when the score came from peer comparison rather than a fallback. */
+  peerBased: boolean;
 }
 
 /**
- * Calculate percentile rank (0-100) of a value within an array
- * Higher percentile = better performance relative to peers
+ * How much of a factor's score comes from peer comparison versus absolute
+ * thresholds, when peer data is available.
+ *
+ * A pure peer-relative score is hostage to whatever cohort the data provider
+ * returns. Apple's Finnhub peers are currently mid-memory-cycle storage firms
+ * posting 954% EPS growth and 372% revenue growth; against that cohort Apple's
+ * steady 16% looks like failure, which is an artefact of the comparison set
+ * rather than a fact about Apple. A pure absolute score has the opposite flaw:
+ * it ignores that a 20% margin means very different things in software and in
+ * grocery retail.
+ *
+ * Blending keeps sector context meaningful while anchoring the result to
+ * something stable.
  */
-function calculatePercentile(value: number, values: number[]): number {
-  if (values.length === 0) return 50; // Default to median if no data
-  const sorted = [...values].sort((a, b) => a - b);
-  const index = sorted.findIndex(v => v >= value);
-  if (index === -1) return 100; // Value is highest
-  return (index / sorted.length) * 100;
-}
+const PEER_WEIGHT = 0.6;
 
 /**
- * Convert z-score to a 0-20 point score using AGGRESSIVE NON-LINEAR transformation
- * 
- * This creates MAXIMUM separation between companies:
- * - Z-score of -2 (2 std devs below) = 0-1 points (poor performers crushed)
- * - Z-score of -1 (1 std dev below) = 2-4 points (below average heavily penalized)
- * - Z-score of 0 (average) = 10 points (neutral baseline)
- * - Z-score of +1 (1 std dev above) = 16-17 points (above average strongly rewarded)
- * - Z-score of +2 (2 std devs above) = 19-20 points (excellent performers maxed out)
- * 
- * Uses STEEP sigmoid with power amplification for extreme separation
+ * Score one metric, blending a peer-relative and an absolute view.
+ *
+ * `thresholds` are [poor, fair, good, excellent] boundaries on the raw value.
+ * `sane` clamps base-effect artefacts before they reach the statistics.
  */
-function zScoreToPoints(zScore: number, maxPoints: number = 20): number {
-  // Clamp z-score to reasonable bounds
-  const clampedZ = Math.max(-3, Math.min(3, zScore));
-  
-  // MUCH STEEPER sigmoid for aggressive separation
-  // Increased steepness from 1.5 to 2.5 for more dramatic differences
-  const steepness = 2.5;
-  let sigmoid = 1 / (1 + Math.exp(-steepness * clampedZ));
-  
-  // Additional power amplification for positive scores
-  // This pushes good performers even higher while crushing poor ones
-  if (clampedZ > 0) {
-    // For above-average stocks, apply power function to amplify further
-    // This makes +1 std dev → ~17 points instead of ~15
-    const powerFactor = 1 + (clampedZ * 0.15); // Amplifies by up to 45% at z=+3
-    sigmoid = Math.min(1, sigmoid * powerFactor);
-  } else if (clampedZ < 0) {
-    // For below-average stocks, apply exponential decay
-    // This makes -1 std dev → ~3 points instead of ~5
-    const decayFactor = 1 - (Math.abs(clampedZ) * 0.15); // Reduces by up to 45% at z=-3
-    sigmoid = Math.max(0, sigmoid * decayFactor);
+function scoreMetric(
+  value: number | undefined,
+  peerValues: Array<number | undefined>,
+  maxPoints: number,
+  opts: {
+    lowerIsBetter?: boolean;
+    thresholds: [number, number, number, number];
+    sane: readonly [number, number];
   }
-  
-  const points = sigmoid * maxPoints;
-  
-  return Math.max(0, Math.min(maxPoints, points));
+): { points: number; peerBased: boolean; percentile: number | null } {
+  if (value === undefined || !Number.isFinite(value)) {
+    // No data for this company at all. Award the midpoint, but flag it as a
+    // non-peer result so overall confidence drops.
+    return { points: maxPoints / 2, peerBased: false, percentile: null };
+  }
+
+  const range = opts.sane as [number, number];
+  const absolutePoints =
+    absoluteFraction(value, opts.thresholds, opts.lowerIsBetter) * maxPoints;
+
+  const clampedValue = clampSane(value, range);
+  const clampedPeers = clean(peerValues).map((v) => clampSane(v, range));
+
+  const z = robustZScore(clampedValue, clampedPeers);
+
+  // Not enough peers to compare against: absolute score only, reported as
+  // non-peer-based so the caller can lower confidence and say so in the UI.
+  // The old engine returned a z-score of 0 here, which the sigmoid mapped to
+  // exactly half marks - the silent ~50/100 bug.
+  if (z === null) {
+    return { points: absolutePoints, peerBased: false, percentile: null };
+  }
+
+  const peerPoints = opts.lowerIsBetter
+    ? zScoreToPointsInverted(z, maxPoints)
+    : zScoreToPoints(z, maxPoints);
+
+  const points = PEER_WEIGHT * peerPoints + (1 - PEER_WEIGHT) * absolutePoints;
+
+  const raw = percentileRank(clampedValue, clampedPeers);
+  const percentile = raw === null ? null : opts.lowerIsBetter ? 100 - raw : raw;
+
+  return { points, peerBased: true, percentile };
+}
+
+function pct(v: number | undefined | null, digits = 1): string {
+  return v === undefined || v === null || !Number.isFinite(v) ? 'n/a' : `${v.toFixed(digits)}%`;
+}
+
+function num(v: number | undefined | null, digits = 1): string {
+  return v === undefined || v === null || !Number.isFinite(v) ? 'n/a' : v.toFixed(digits);
+}
+
+/** Describe where a value sits relative to a peer distribution, in words. */
+function vsMedian(value: number | undefined, dist: MetricDistribution | null, unit = '%'): string {
+  if (value === undefined || !Number.isFinite(value)) return 'no company data';
+  if (!dist) return `${value.toFixed(1)}${unit} (no peer baseline)`;
+  const delta = value - dist.median;
+  const direction = delta >= 0 ? 'above' : 'below';
+  return `${value.toFixed(1)}${unit} vs peer median ${dist.median.toFixed(1)}${unit} (${Math.abs(delta).toFixed(1)}${unit} ${direction})`;
 }
 
 /**
- * Calculate industry benchmarks from peer metrics
+ * Summarise a peer metric using the SAME clamped values the scorer uses.
+ *
+ * Displaying an unclamped median next to a clamped score would tell the user
+ * "peer median EPS growth 617.8%" while the engine actually scored against
+ * 150%. The numbers on screen must be the numbers the score came from.
  */
+function describeClamped(
+  values: Array<number | undefined>,
+  range: readonly [number, number]
+): MetricDistribution | null {
+  return describe(
+    clean(values).map((v) => clampSane(v, range as [number, number]))
+  );
+}
+
 export function calculateIndustryBenchmarks(
-  peerMetrics: PeerMetrics[],
-  industry: string
+  peers: PeerMetrics[],
+  industry: string,
+  reliable: boolean
 ): IndustryBenchmarks {
-  const validRevGrowth = peerMetrics.map(p => p.revenueGrowth).filter(v => v !== undefined) as number[];
-  const validEpsGrowth = peerMetrics.map(p => p.epsGrowth).filter(v => v !== undefined) as number[];
-  const validRoe = peerMetrics.map(p => p.roe).filter(v => v !== undefined) as number[];
-  const validNetMargin = peerMetrics.map(p => p.netMargin).filter(v => v !== undefined) as number[];
-  const validOpMargin = peerMetrics.map(p => p.operatingMargin).filter(v => v !== undefined) as number[];
-  const validPe = peerMetrics.map(p => p.pe).filter(v => v !== undefined) as number[];
-  const validPb = peerMetrics.map(p => p.pb).filter(v => v !== undefined) as number[];
-  const validMom1M = peerMetrics.map(p => p.momentum1M).filter(v => v !== undefined) as number[];
-  const validMom3M = peerMetrics.map(p => p.momentum3M).filter(v => v !== undefined) as number[];
-
-  const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-
   return {
     industry,
-    peerCount: peerMetrics.length,
-    avgRevenueGrowth: avg(validRevGrowth),
-    avgEpsGrowth: avg(validEpsGrowth),
-    avgRoe: avg(validRoe),
-    avgNetMargin: avg(validNetMargin),
-    avgOperatingMargin: avg(validOpMargin),
-    avgPe: avg(validPe),
-    avgPb: avg(validPb),
-    avgMomentum1M: avg(validMom1M),
-    avgMomentum3M: avg(validMom3M),
+    peerCount: peers.length,
+    reliable,
+    distributions: {
+      revenueGrowth: describeClamped(peers.map((p) => p.revenueGrowth), SANE_RANGES.growthPct),
+      epsGrowth: describeClamped(peers.map((p) => p.epsGrowth), SANE_RANGES.growthPct),
+      roe: describeClamped(peers.map((p) => p.roe), SANE_RANGES.returnPct),
+      netMargin: describeClamped(peers.map((p) => p.netMargin), SANE_RANGES.marginPct),
+      operatingMargin: describeClamped(peers.map((p) => p.operatingMargin), SANE_RANGES.marginPct),
+      pe: describeClamped(peers.map((p) => p.pe), SANE_RANGES.ratio),
+      pb: describeClamped(peers.map((p) => p.pb), SANE_RANGES.ratio),
+      debtEquity: describeClamped(peers.map((p) => p.debtEquity), SANE_RANGES.leverage),
+      momentum3M: describeClamped(peers.map((p) => p.momentum3M), SANE_RANGES.returnPct),
+    },
+  };
+}
+
+/** GROWTH - revenue and EPS growth versus peers. */
+function calculateGrowthScore(
+  financials: FinnhubBasicFinancials | null,
+  peers: PeerMetrics[],
+  benchmarks: IndustryBenchmarks
+): FactorResult {
+  const m = financials?.metric;
+  const revenueGrowth = m?.revenueGrowthQuarterlyYoy ?? m?.revenueGrowthAnnual;
+  const epsGrowth = m?.epsGrowthQuarterlyYoy ?? m?.epsGrowthAnnual;
+
+  const rev = scoreMetric(revenueGrowth, peers.map((p) => p.revenueGrowth), 10, {
+    thresholds: [0, 5, 12, 25],
+    sane: SANE_RANGES.growthPct,
+  });
+  const eps = scoreMetric(epsGrowth, peers.map((p) => p.epsGrowth), 10, {
+    thresholds: [0, 8, 15, 30],
+    sane: SANE_RANGES.growthPct,
+  });
+
+  const peerBased = rev.peerBased || eps.peerBased;
+  const percentiles = clean([rev.percentile, eps.percentile]);
+
+  return {
+    score: Math.round(rev.points + eps.points),
+    detail: `Revenue ${vsMedian(revenueGrowth, benchmarks.distributions.revenueGrowth)}; EPS ${vsMedian(epsGrowth, benchmarks.distributions.epsGrowth)}`,
+    tooltip: peerBased
+      ? `Growth ranked against ${benchmarks.peerCount} ${benchmarks.industry} peers using median-based normalisation.`
+      : `Not enough peer data for an industry comparison. Scored against absolute growth thresholds instead.`,
+    percentile: percentiles.length ? Math.round(percentiles.reduce((a, b) => a + b, 0) / percentiles.length) : null,
+    peerBased,
+  };
+}
+
+/** PROFITABILITY - ROE, net margin, operating margin. */
+function calculateProfitabilityScore(
+  financials: FinnhubBasicFinancials | null,
+  peers: PeerMetrics[],
+  benchmarks: IndustryBenchmarks
+): FactorResult {
+  const m = financials?.metric;
+
+  const roe = scoreMetric(m?.roeRfy, peers.map((p) => p.roe), 8, {
+    thresholds: [0, 8, 15, 25],
+    sane: SANE_RANGES.returnPct,
+  });
+  const net = scoreMetric(m?.netProfitMarginAnnual, peers.map((p) => p.netMargin), 6, {
+    thresholds: [0, 5, 12, 20],
+    sane: SANE_RANGES.marginPct,
+  });
+  const op = scoreMetric(m?.operatingMarginAnnual, peers.map((p) => p.operatingMargin), 6, {
+    thresholds: [0, 8, 15, 25],
+    sane: SANE_RANGES.marginPct,
+  });
+
+  const peerBased = roe.peerBased || net.peerBased || op.peerBased;
+  const percentiles = clean([roe.percentile, net.percentile, op.percentile]);
+
+  return {
+    score: Math.round(roe.points + net.points + op.points),
+    detail: `ROE ${vsMedian(m?.roeRfy, benchmarks.distributions.roe)}; net margin ${vsMedian(m?.netProfitMarginAnnual, benchmarks.distributions.netMargin)}`,
+    tooltip: peerBased
+      ? `Margins and returns ranked against ${benchmarks.peerCount} sector peers.`
+      : `Scored against absolute profitability thresholds - peer data unavailable.`,
+    percentile: percentiles.length ? Math.round(percentiles.reduce((a, b) => a + b, 0) / percentiles.length) : null,
+    peerBased,
+  };
+}
+
+/** VALUATION - P/E and P/B, where lower is better. */
+function calculateValuationScore(
+  financials: FinnhubBasicFinancials | null,
+  peers: PeerMetrics[],
+  benchmarks: IndustryBenchmarks
+): FactorResult {
+  const m = financials?.metric;
+
+  // Negative earnings make P/E meaningless rather than attractive; exclude
+  // them from both the company value and the peer set.
+  const peValue = m?.peNormalizedAnnual !== undefined && m.peNormalizedAnnual > 0 ? m.peNormalizedAnnual : undefined;
+  const peerPe = peers.map((p) => (p.pe !== undefined && p.pe > 0 ? p.pe : undefined));
+
+  const pe = scoreMetric(peValue, peerPe, 12, {
+    lowerIsBetter: true,
+    thresholds: [10, 18, 28, 45],
+    sane: SANE_RANGES.ratio,
+  });
+  const pb = scoreMetric(m?.pbAnnual, peers.map((p) => p.pb), 8, {
+    lowerIsBetter: true,
+    thresholds: [1.5, 3, 6, 10],
+    sane: SANE_RANGES.ratio,
+  });
+
+  const peerBased = pe.peerBased || pb.peerBased;
+  const percentiles = clean([pe.percentile, pb.percentile]);
+
+  const peNote =
+    m?.peNormalizedAnnual !== undefined && m.peNormalizedAnnual <= 0
+      ? 'P/E not meaningful (negative earnings)'
+      : `P/E ${vsMedian(peValue, benchmarks.distributions.pe, '')}`;
+
+  return {
+    score: Math.round(pe.points + pb.points),
+    detail: `${peNote}; P/B ${vsMedian(m?.pbAnnual, benchmarks.distributions.pb, '')}`,
+    tooltip: peerBased
+      ? `Cheaper than sector peers scores higher. Ranked against ${benchmarks.peerCount} peers.`
+      : `Scored against absolute valuation bands - peer data unavailable.`,
+    percentile: percentiles.length ? Math.round(percentiles.reduce((a, b) => a + b, 0) / percentiles.length) : null,
+    peerBased,
+  };
+}
+
+/** QUALITY - balance-sheet strength. */
+function calculateQualityScore(
+  financials: FinnhubBasicFinancials | null,
+  peers: PeerMetrics[],
+  benchmarks: IndustryBenchmarks
+): FactorResult {
+  const m = financials?.metric;
+
+  const de = scoreMetric(m?.debtEquityAnnual, peers.map((p) => p.debtEquity), 8, {
+    lowerIsBetter: true,
+    thresholds: [0.3, 0.8, 1.5, 2.5],
+    sane: SANE_RANGES.leverage,
+  });
+  const cr = scoreMetric(m?.currentRatioAnnual, peers.map((p) => p.currentRatio), 6, {
+    thresholds: [0.8, 1.0, 1.5, 2.0],
+    sane: SANE_RANGES.liquidity,
+  });
+  const roa = scoreMetric(m?.roaRfy, peers.map((p) => p.roa), 6, {
+    thresholds: [0, 3, 7, 12],
+    sane: SANE_RANGES.returnPct,
+  });
+
+  const peerBased = de.peerBased || cr.peerBased || roa.peerBased;
+  const percentiles = clean([de.percentile, cr.percentile, roa.percentile]);
+
+  return {
+    score: Math.round(de.points + cr.points + roa.points),
+    detail: `Debt/equity ${num(m?.debtEquityAnnual, 2)}; current ratio ${num(m?.currentRatioAnnual, 2)}; ROA ${pct(m?.roaRfy)}`,
+    tooltip: peerBased
+      ? `Balance-sheet strength versus ${benchmarks.peerCount} peers. Lower leverage and healthier liquidity score higher.`
+      : `Scored against absolute balance-sheet thresholds - peer data unavailable.`,
+    percentile: percentiles.length ? Math.round(percentiles.reduce((a, b) => a + b, 0) / percentiles.length) : null,
+    peerBased,
   };
 }
 
 /**
- * GROWTH SCORE (0-20 points)
- * 
- * Analyzes revenue growth, EPS growth, and margin expansion trends.
- * Compares to industry peers and rewards consistent, stable growth over volatility.
- */
-function calculateGrowthScore(
-  financials: FinnhubBasicFinancials | null,
-  peerMetrics: PeerMetrics[],
-  benchmarks: IndustryBenchmarks
-): { score: number; detail: string; tooltip: string; percentile: number } {
-  if (!financials?.metric) {
-    return {
-      score: 10,
-      detail: 'Limited growth data available',
-      tooltip: 'Insufficient data for growth analysis',
-      percentile: 50,
-    };
-  }
-
-  const metric = financials.metric;
-  
-  // Get company's growth metrics (prefer quarterly for recency, fall back to annual)
-  const revenueGrowth = metric.revenueGrowthQuarterlyYoy ?? metric.revenueGrowthAnnual ?? 0;
-  const epsGrowth = metric.epsGrowthQuarterlyYoy ?? metric.epsGrowthAnnual ?? 0;
-  
-  // Extract peer growth rates
-  const peerRevGrowth = peerMetrics.map(p => p.revenueGrowth).filter(v => v !== undefined) as number[];
-  const peerEpsGrowth = peerMetrics.map(p => p.epsGrowth).filter(v => v !== undefined) as number[];
-
-  // Calculate statistics for z-score
-  const avgRevGrowth = benchmarks.avgRevenueGrowth;
-  const avgEpsGrowth = benchmarks.avgEpsGrowth;
-  
-  const stdDevRevGrowth = Math.sqrt(
-    peerRevGrowth.reduce((sum, v) => sum + Math.pow(v - avgRevGrowth, 2), 0) / Math.max(peerRevGrowth.length, 1)
-  );
-  const stdDevEpsGrowth = Math.sqrt(
-    peerEpsGrowth.reduce((sum, v) => sum + Math.pow(v - avgEpsGrowth, 2), 0) / Math.max(peerEpsGrowth.length, 1)
-  );
-
-  // Calculate z-scores
-  const revGrowthZScore = calculateZScore(revenueGrowth, avgRevGrowth, stdDevRevGrowth);
-  const epsGrowthZScore = calculateZScore(epsGrowth, avgEpsGrowth, stdDevEpsGrowth);
-
-  // Convert to points (10 points each for revenue and EPS)
-  const revPoints = zScoreToPoints(revGrowthZScore, 10);
-  const epsPoints = zScoreToPoints(epsGrowthZScore, 10);
-
-  const totalScore = Math.round(revPoints + epsPoints);
-
-  // Calculate overall percentile
-  const compositeGrowth = (revenueGrowth + epsGrowth) / 2;
-  const peerCompositeGrowth = peerMetrics
-    .map(p => ((p.revenueGrowth ?? 0) + (p.epsGrowth ?? 0)) / 2);
-  const percentile = Math.round(calculatePercentile(compositeGrowth, peerCompositeGrowth));
-
-  // Generate contextual explanation
-  const revComparison = revenueGrowth > avgRevGrowth ? 'above' : 'below';
-  const epsComparison = epsGrowth > avgEpsGrowth ? 'above' : 'below';
-  
-  const detail = `Revenue: ${revenueGrowth.toFixed(1)}% (${revComparison} industry avg ${avgRevGrowth.toFixed(1)}%), EPS: ${epsGrowth.toFixed(1)}% (${epsComparison} avg ${avgEpsGrowth.toFixed(1)}%)`;
-  
-  const tooltip = `${percentile}th percentile vs ${benchmarks.peerCount} peers. ${
-    totalScore >= 15 ? 'Strong' : totalScore >= 10 ? 'Average' : 'Below average'
-  } growth relative to ${benchmarks.industry} sector`;
-
-  return { score: totalScore, detail, tooltip, percentile };
-}
-
-/**
- * PROFITABILITY SCORE (0-20 points)
- * 
- * Evaluates operating margin, net margin, and ROE relative to peers.
- * High margins vs industry increase score; volatility or decline reduces it.
- */
-function calculateProfitabilityScore(
-  financials: FinnhubBasicFinancials | null,
-  peerMetrics: PeerMetrics[],
-  benchmarks: IndustryBenchmarks
-): { score: number; detail: string; tooltip: string; percentile: number } {
-  if (!financials?.metric) {
-    return {
-      score: 10,
-      detail: 'Limited profitability data available',
-      tooltip: 'Insufficient data for profitability analysis',
-      percentile: 50,
-    };
-  }
-
-  const metric = financials.metric;
-  const roe = metric.roeRfy ?? 0;
-  const netMargin = metric.netProfitMarginAnnual ?? 0;
-  const opMargin = metric.operatingMarginAnnual ?? 0;
-
-  // Extract peer profitability
-  const peerRoe = peerMetrics.map(p => p.roe).filter(v => v !== undefined) as number[];
-  const peerNetMargin = peerMetrics.map(p => p.netMargin).filter(v => v !== undefined) as number[];
-  const peerOpMargin = peerMetrics.map(p => p.operatingMargin).filter(v => v !== undefined) as number[];
-
-  // Calculate statistics
-  const stdDevRoe = Math.sqrt(
-    peerRoe.reduce((sum, v) => sum + Math.pow(v - benchmarks.avgRoe, 2), 0) / Math.max(peerRoe.length, 1)
-  );
-  const stdDevNetMargin = Math.sqrt(
-    peerNetMargin.reduce((sum, v) => sum + Math.pow(v - benchmarks.avgNetMargin, 2), 0) / Math.max(peerNetMargin.length, 1)
-  );
-  const stdDevOpMargin = Math.sqrt(
-    peerOpMargin.reduce((sum, v) => sum + Math.pow(v - benchmarks.avgOperatingMargin, 2), 0) / Math.max(peerOpMargin.length, 1)
-  );
-
-  // Calculate z-scores
-  const roeZScore = calculateZScore(roe, benchmarks.avgRoe, stdDevRoe);
-  const netMarginZScore = calculateZScore(netMargin, benchmarks.avgNetMargin, stdDevNetMargin);
-  const opMarginZScore = calculateZScore(opMargin, benchmarks.avgOperatingMargin, stdDevOpMargin);
-
-  // Convert to points (weighted: ROE 8pts, Net Margin 6pts, Op Margin 6pts)
-  const roePoints = zScoreToPoints(roeZScore, 8);
-  const netMarginPoints = zScoreToPoints(netMarginZScore, 6);
-  const opMarginPoints = zScoreToPoints(opMarginZScore, 6);
-
-  const totalScore = Math.round(roePoints + netMarginPoints + opMarginPoints);
-
-  // Calculate percentile
-  const compositeProfitability = (roe + netMargin + opMargin) / 3;
-  const peerCompositeProfitability = peerMetrics.map(
-    p => ((p.roe ?? 0) + (p.netMargin ?? 0) + (p.operatingMargin ?? 0)) / 3
-  );
-  const percentile = Math.round(calculatePercentile(compositeProfitability, peerCompositeProfitability));
-
-  const detail = `ROE: ${roe.toFixed(1)}% (avg ${benchmarks.avgRoe.toFixed(1)}%), Net margin: ${netMargin.toFixed(1)}% (avg ${benchmarks.avgNetMargin.toFixed(1)}%)`;
-  const tooltip = `${percentile}th percentile. ${
-    totalScore >= 15 ? 'Highly profitable' : totalScore >= 10 ? 'Average profitability' : 'Below average margins'
-  } vs ${benchmarks.industry} peers`;
-
-  return { score: totalScore, detail, tooltip, percentile };
-}
-
-/**
- * VALUATION SCORE (0-20 points)
- * 
- * Sophisticated valuation analysis that considers:
- * 1. P/E relative to industry (with tolerance for reasonable premiums)
- * 2. P/B relative to industry
- * 3. PEG ratio (P/E justified by growth) when available
- * 4. Industry context (tech can have higher multiples than banks)
- * 
- * Does NOT blindly penalize valuations above industry average - considers if they're justified.
- */
-function calculateValuationScore(
-  financials: FinnhubBasicFinancials | null,
-  peerMetrics: PeerMetrics[],
-  benchmarks: IndustryBenchmarks
-): { score: number; detail: string; tooltip: string; percentile: number } {
-  if (!financials?.metric) {
-    return {
-      score: 10,
-      detail: 'Limited valuation data available',
-      tooltip: 'Insufficient data for valuation analysis',
-      percentile: 50,
-    };
-  }
-
-  const metric = financials.metric;
-  const pe = metric.peNormalizedAnnual ?? 0;
-  const pb = metric.pbAnnual ?? 0;
-  const peg = metric.pegAnnual;
-
-  // Skip scoring if P/E is invalid or extreme
-  if (pe <= 0 || pe > 500) {
-    return {
-      score: 10,
-      detail: 'P/E not meaningful for valuation',
-      tooltip: 'Company may be unprofitable or have unusual earnings',
-      percentile: 50,
-    };
-  }
-
-  // Extract peer valuations (filter outliers)
-  const peerPe = peerMetrics
-    .map(p => p.pe)
-    .filter(v => v !== undefined && v > 0 && v < 500) as number[];
-  const peerPb = peerMetrics
-    .map(p => p.pb)
-    .filter(v => v !== undefined && v > 0) as number[];
-
-  // If insufficient peer data, use absolute but generous thresholds
-  if (peerPe.length < 3) {
-    let score = 10; // Start neutral
-    
-    // Generous absolute thresholds (industry-agnostic baseline)
-    if (pe < 15) score = 18; // Very cheap
-    else if (pe < 25) score = 15; // Reasonable
-    else if (pe < 35) score = 12; // Fair
-    else if (pe < 50) score = 10; // Slightly expensive
-    else score = 8; // Expensive
-    
-    // PEG adjustment if available
-    if (peg && peg > 0) {
-      if (peg < 1) score += 2; // Growth at discount
-      else if (peg > 2) score -= 2; // Expensive for growth
-    }
-
-    return {
-      score: Math.max(0, Math.min(20, score)),
-      detail: `P/E: ${pe.toFixed(1)}x, P/B: ${pb.toFixed(1)}x${peg ? `, PEG: ${peg.toFixed(2)}` : ''}`,
-      tooltip: 'Limited peer data; using absolute valuation assessment',
-      percentile: 50,
-    };
-  }
-
-  // Calculate industry statistics
-  const avgPe = benchmarks.avgPe;
-  const stdDevPe = Math.sqrt(
-    peerPe.reduce((sum, v) => sum + Math.pow(v - avgPe, 2), 0) / peerPe.length
-  );
-
-  // Calculate relative valuation (how much above/below industry)
-  const peRatio = pe / avgPe; // 1.0 = at average, 1.2 = 20% premium, 0.8 = 20% discount
-  
-  // Score P/E with AGGRESSIVE non-linear approach (12 points max)
-  // Heavily rewards undervaluation, severely penalizes overvaluation
-  let peScore = 0;
-  
-  if (peRatio <= 0.6) {
-    // 40%+ discount to industry = exceptional value
-    peScore = 12;
-  } else if (peRatio <= 0.75) {
-    // 25-40% discount = excellent value
-    peScore = 11.5;
-  } else if (peRatio <= 0.85) {
-    // 15-25% discount = very good value
-    peScore = 10.5;
-  } else if (peRatio <= 0.95) {
-    // 5-15% discount = good value
-    peScore = 9.5;
-  } else if (peRatio <= 1.05) {
-    // Within 5% of industry average = fair/neutral
-    peScore = 8;
-  } else if (peRatio <= 1.15) {
-    // 5-15% premium = acceptable if justified
-    peScore = 6.5;
-  } else if (peRatio <= 1.30) {
-    // 15-30% premium = concerning
-    peScore = 4.5;
-  } else if (peRatio <= 1.50) {
-    // 30-50% premium = expensive
-    peScore = 3;
-  } else if (peRatio <= 2.0) {
-    // 50-100% premium = very expensive
-    peScore = 1.5;
-  } else {
-    // 100%+ premium = extremely overvalued
-    peScore = 0.5;
-  }
-
-  // PEG Ratio Adjustment (can add up to 5 points or subtract up to 4)
-  // PEG < 1 means P/E is justified by growth (good value)
-  // PEG > 2 means expensive even accounting for growth
-  let pegAdjustment = 0;
-  if (peg && peg > 0) {
-    if (peg < 0.5) {
-      pegAdjustment = 5; // Exceptional - growth at steep discount
-    } else if (peg < 0.8) {
-      pegAdjustment = 4; // Excellent - growth at discount
-    } else if (peg < 1.0) {
-      pegAdjustment = 2.5; // Great - reasonable price for growth
-    } else if (peg < 1.3) {
-      pegAdjustment = 1; // Fair - growth justifies some premium
-    } else if (peg < 1.8) {
-      pegAdjustment = -0.5; // Slightly expensive for growth
-    } else if (peg < 2.5) {
-      pegAdjustment = -2; // Expensive even with growth
-    } else {
-      pegAdjustment = -4; // Very expensive relative to growth
-    }
-  }
-
-  peScore = Math.max(0, Math.min(12, peScore + pegAdjustment));
-
-  // Score P/B (8 points max) - aggressive industry-relative scoring
-  let pbScore = 4; // Default neutral (reduced from 6)
-  if (pb > 0 && peerPb.length >= 3) {
-    const avgPb = benchmarks.avgPb;
-    const pbRatio = pb / avgPb;
-    
-    if (pbRatio <= 0.6) pbScore = 8; // Deep discount
-    else if (pbRatio <= 0.75) pbScore = 7.5; // Strong discount
-    else if (pbRatio <= 0.9) pbScore = 6.5; // Good discount
-    else if (pbRatio <= 1.0) pbScore = 5; // Slight discount
-    else if (pbRatio <= 1.15) pbScore = 3.5; // Slight premium
-    else if (pbRatio <= 1.35) pbScore = 2; // Moderate premium
-    else if (pbRatio <= 1.6) pbScore = 1; // High premium
-    else pbScore = 0.5; // Very high premium
-  }
-
-  const totalScore = Math.round(peScore + pbScore);
-
-  // Calculate percentile (inverted - lower P/E = higher percentile)
-  const invertedPercentile = 100 - Math.round(calculatePercentile(pe, peerPe));
-  const percentile = Math.max(0, Math.min(100, invertedPercentile));
-
-  // Generate contextual explanation
-  const peDiff = ((pe - avgPe) / avgPe) * 100;
-  let peRelative: string;
-  
-  if (Math.abs(peDiff) < 5) {
-    peRelative = 'in line with';
-  } else if (peDiff < 0) {
-    peRelative = `${Math.abs(peDiff).toFixed(0)}% below`;
-  } else {
-    peRelative = `${peDiff.toFixed(0)}% above`;
-  }
-
-  const detail = `P/E: ${pe.toFixed(1)}x (${peRelative} industry ${avgPe.toFixed(1)}x)${peg ? `, PEG: ${peg.toFixed(2)}` : ''}, P/B: ${pb.toFixed(1)}x`;
-  
-  let valuationAssessment: string;
-  if (totalScore >= 16) valuationAssessment = 'Excellent value';
-  else if (totalScore >= 14) valuationAssessment = 'Attractive valuation';
-  else if (totalScore >= 11) valuationAssessment = 'Fair valuation';
-  else if (totalScore >= 8) valuationAssessment = 'Slightly expensive';
-  else valuationAssessment = 'Premium valuation';
-
-  const tooltip = `${percentile}th percentile. ${valuationAssessment} - ${peRatio < 1 ? 'trading below' : peRatio <= 1.15 ? 'near' : 'above'} ${benchmarks.industry} average`;
-
-  return { score: totalScore, detail, tooltip, percentile };
-}
-
-/**
- * QUALITY SCORE (0-20 points) - REFINED FRAMEWORK
- * 
- * Comprehensive 4-component quality analysis:
- * 1. Balance Sheet Strength (5 pts) - D/E, liquidity, interest coverage
- * 2. Earnings Stability (5 pts) - EPS consistency, volatility, positive streak
- * 3. Cash Flow Quality (5 pts) - FCF margin, cash conversion ratio
- * 4. Capital Efficiency (5 pts) - ROIC, ROA, historical stability
- * 
- * Designed to prevent mega-caps with strong fundamentals from scoring below 10/20.
- */
-function calculateQualityScore(
-  financials: FinnhubBasicFinancials | null,
-  peerMetrics: PeerMetrics[],
-  benchmarks: IndustryBenchmarks
-): { score: number; detail: string; tooltip: string; percentile: number } {
-  if (!financials?.metric) {
-    return {
-      score: 10,
-      detail: 'Limited quality data available',
-      tooltip: 'Measures financial strength, earnings consistency, and capital efficiency relative to peers',
-      percentile: 50,
-    };
-  }
-
-  const metric = financials.metric;
-  
-  // ===== 1. BALANCE SHEET STRENGTH (0-5 points) =====
-  // Uses D/E ratio, current ratio, with special handling for mega-caps
-  
-  const debtToEquity = metric.debtEquityAnnual ?? 999;
-  const currentRatio = metric.currentRatioAnnual ?? 1.0;
-  // Interest coverage not available in Finnhub basic financials
-  // Use low D/E as proxy for strong balance sheet
-  const hasStrongBalanceSheet = debtToEquity < 0.5; // Low debt = likely good coverage
-  
-  // Extract peer balance sheet metrics
-  const peerDebtEquity = peerMetrics.map(p => p.debtEquity).filter(v => v !== undefined && v < 500) as number[];
-  const peerCurrentRatio = peerMetrics.map(p => p.currentRatio).filter(v => v !== undefined) as number[];
-  
-  const avgDebtEquity = peerDebtEquity.length > 0 
-    ? peerDebtEquity.reduce((a, b) => a + b, 0) / peerDebtEquity.length 
-    : 1.0;
-  const stdDevDebtEquity = peerDebtEquity.length > 0
-    ? Math.sqrt(peerDebtEquity.reduce((sum, v) => sum + Math.pow(v - avgDebtEquity, 2), 0) / peerDebtEquity.length)
-    : 0.5;
-  
-  // D/E scoring with balance sheet strength safeguard (3 points max)
-  let debtScore = 0;
-  if (hasStrongBalanceSheet) {
-    // If D/E < 0.5 (very low debt), assume strong financial position
-    // Cap the penalty for D/E ratios below 2x
-    if (debtToEquity < 2.0) {
-      debtScore = 3; // Perfect score if D/E < 2x and low overall debt
-    } else {
-      // Still penalize excessive leverage
-      const debtZScore = -calculateZScore(debtToEquity, avgDebtEquity, stdDevDebtEquity || 0.5);
-      debtScore = Math.max(1.5, zScoreToPoints(debtZScore, 3)); // Floor at 1.5
-    }
-  } else {
-    // Normal D/E scoring (inverted - lower is better)
-    const debtZScore = -calculateZScore(debtToEquity, avgDebtEquity, stdDevDebtEquity || 0.5);
-    debtScore = zScoreToPoints(debtZScore, 3);
-  }
-  
-  // Current ratio scoring (2 points max) - weighted less for mega-caps
-  const avgCurrentRatio = peerCurrentRatio.length > 0
-    ? peerCurrentRatio.reduce((a, b) => a + b, 0) / peerCurrentRatio.length
-    : 1.5;
-  const stdDevCurrentRatio = peerCurrentRatio.length > 0
-    ? Math.sqrt(peerCurrentRatio.reduce((sum, v) => sum + Math.pow(v - avgCurrentRatio, 2), 0) / peerCurrentRatio.length)
-    : 0.5;
-  const currentRatioZScore = calculateZScore(currentRatio, avgCurrentRatio, stdDevCurrentRatio || 0.5);
-  const liquidityScore = zScoreToPoints(currentRatioZScore, 2);
-  
-  const balanceSheetScore = debtScore + liquidityScore; // 0-5 points
-  
-  // ===== 2. EARNINGS STABILITY (0-5 points) =====
-  // Uses EPS volatility and consistency over time
-  
-  // Note: Finnhub doesn't provide 5-year EPS history in basic financials
-  // We'll estimate stability using available growth metrics as proxy
-  const epsGrowth = metric.epsGrowthAnnual ?? 0;
-  const epsGrowthQuarterly = metric.epsGrowthQuarterlyYoy ?? epsGrowth;
-  
-  let earningsStabilityScore = 2.5; // Default neutral
-  
-  // Bonus for consistent positive EPS (proxy using growth and margins)
-  // Since EPS actual values aren't in basic financials, use profitability as proxy
-  const netMargin = metric.netProfitMarginAnnual ?? 0;
-  const hasPositiveEarnings = netMargin > 0 && epsGrowth > -50; // Not massively negative
-  
-  if (hasPositiveEarnings) {
-    // Positive earnings = bonus
-    earningsStabilityScore += 1.5;
-    
-    // Additional bonus if growth is consistent (quarterly vs annual similar)
-    const growthConsistency = Math.abs(epsGrowth - epsGrowthQuarterly);
-    if (growthConsistency < 10) {
-      earningsStabilityScore += 1; // Consistent growth = +1 bonus
-    }
-  } else {
-    // Negative earnings = penalty
-    earningsStabilityScore = Math.max(0, earningsStabilityScore - 1.5);
-  }
-  
-  earningsStabilityScore = Math.min(5, Math.max(0, earningsStabilityScore)); // Clamp 0-5
-  
-  // ===== 3. CASH FLOW QUALITY (0-5 points) =====
-  // Since FCF data isn't in basic financials, use profitability margins as proxy
-  // Companies with high operating margins typically generate strong cash flow
-  
-  const operatingMargin = metric.operatingMarginAnnual ?? 0;
-  const netProfitMargin = metric.netProfitMarginAnnual ?? 0;
-  
-  let cashFlowScore = 2.5; // Default neutral
-  
-  // Use operating margin as FCF proxy (companies with high operating margins usually have strong FCF)
-  if (operatingMargin > 20 && netProfitMargin > 10) {
-    // Very high margins = excellent cash generation potential
-    cashFlowScore = 5;
-  } else if (operatingMargin > 15 && netProfitMargin > 8) {
-    // Strong margins = strong cash flow
-    cashFlowScore = 4;
-  } else if (operatingMargin > 10 && netProfitMargin > 5) {
-    // Good margins = adequate cash flow
-    cashFlowScore = 3.5;
-  } else if (operatingMargin > 5 && netProfitMargin > 2) {
-    // Modest margins = modest cash flow
-    cashFlowScore = 2;
-  } else if (operatingMargin < 0 || netProfitMargin < 0) {
-    // Negative margins = cash flow concerns
-    cashFlowScore = 0.5;
-  }
-  
-  // ===== 4. CAPITAL EFFICIENCY (0-5 points) =====
-  // Uses ROIC (or ROE as proxy) and ROA
-  
-  const roa = metric.roaRfy ?? 0;
-  const roe = metric.roeRfy ?? 0;
-  // ROIC not in basic financials, use ROE as proxy (highly correlated)
-  const roic = roe;
-  
-  let capitalEfficiencyScore = 0;
-  
-  // ROIC scoring (3 points)
-  if (roic > 15) {
-    capitalEfficiencyScore += 3; // Excellent
-  } else if (roic > 10) {
-    capitalEfficiencyScore += 2.5; // Strong
-  } else if (roic > 5) {
-    capitalEfficiencyScore += 1.5; // Adequate
-  } else if (roic > 0) {
-    capitalEfficiencyScore += 0.5; // Weak
-  }
-  // ROIC < 0 = 0 points
-  
-  // ROA scoring (2 points) - relative to industry
-  const peerRoa = peerMetrics.map(p => p.roa).filter(v => v !== undefined) as number[];
-  const avgRoa = peerRoa.length > 0
-    ? peerRoa.reduce((a, b) => a + b, 0) / peerRoa.length
-    : benchmarks.avgRoe * 0.5;
-  const stdDevRoa = peerRoa.length > 0
-    ? Math.sqrt(peerRoa.reduce((sum, v) => sum + Math.pow(v - avgRoa, 2), 0) / peerRoa.length)
-    : 2;
-  const roaZScore = calculateZScore(roa, avgRoa, stdDevRoa);
-  const roaScore = zScoreToPoints(roaZScore, 2);
-  
-  capitalEfficiencyScore += roaScore;
-  capitalEfficiencyScore = Math.min(5, capitalEfficiencyScore); // Cap at 5
-  
-  // ===== TOTAL QUALITY SCORE =====
-  const totalScore = Math.round(
-    balanceSheetScore + 
-    earningsStabilityScore + 
-    cashFlowScore + 
-    capitalEfficiencyScore
-  );
-  
-  // MEGA-CAP SAFEGUARD: If company has strong FCF, ROIC > 10%, and positive earnings,
-  // ensure minimum score of 10/20 (average) even with elevated debt
-  const isMegaCap = (cashFlowScore >= 4 && capitalEfficiencyScore >= 3.5 && earningsStabilityScore >= 3.5);
-  const finalScore = isMegaCap ? Math.max(10, totalScore) : totalScore;
-  
-  // Calculate composite percentile
-  const compositeQuality = (
-    balanceSheetScore * 20 + 
-    earningsStabilityScore * 20 + 
-    cashFlowScore * 20 + 
-    capitalEfficiencyScore * 20
-  );
-  
-  const peerCompositeQuality = peerMetrics.map(p => {
-    // Simplified peer quality composite
-    const pDebt = p.debtEquity ?? 1;
-    const pCurrent = p.currentRatio ?? 1.5;
-    const pRoa = p.roa ?? 0;
-    return ((pDebt < 2 ? 50 : 30) + (pCurrent * 10) + (pRoa * 5));
-  });
-  
-  const percentile = Math.round(calculatePercentile(compositeQuality, peerCompositeQuality));
-
-  // Generate contextual explanation
-  const qualityLevel = finalScore >= 16 ? 'exceptional quality' 
-    : finalScore >= 13 ? 'strong quality'
-    : finalScore >= 10 ? 'adequate quality'
-    : finalScore >= 7 ? 'below average quality'
-    : 'quality concerns';
-  
-  const detail = `Balance sheet: ${balanceSheetScore.toFixed(1)}/5, Earnings stability: ${earningsStabilityScore.toFixed(1)}/5, Cash flow: ${cashFlowScore.toFixed(1)}/5, Capital efficiency: ${capitalEfficiencyScore.toFixed(1)}/5`;
-  
-  const tooltip = `${percentile}th percentile. ${qualityLevel.charAt(0).toUpperCase() + qualityLevel.slice(1)} - Measures financial strength, earnings consistency, and capital efficiency relative to ${benchmarks.peerCount} peers`;
-
-  return { score: finalScore, detail, tooltip, percentile };
-}
-
-/**
- * ANALYST SCORE (0-20 points)
- * 
- * Combines analyst recommendations and price target vs current price.
+ * ANALYST - consensus ratings and price-target upside.
+ * This factor is inherently absolute rather than peer-relative.
  */
 function calculateAnalystScore(
   quote: FinnhubQuote,
   recommendations: FinnhubRecommendationTrend[],
   priceTarget: FinnhubPriceTarget | null
-): { score: number; detail: string; tooltip: string; percentile: number } {
-  let score = 10; // Default neutral score
-  let detail = 'Limited analyst coverage';
-  let tooltip = 'Insufficient analyst data';
-  let percentile = 50;
+): FactorResult {
+  let ratingPoints = 6; // neutral default out of 12
+  let ratingDetail = 'No analyst ratings available';
 
-  // Analyst recommendations (0-15 points)
-  if (recommendations.length > 0) {
-    const latest = recommendations[0];
+  const latest = recommendations?.[0];
+  if (latest) {
     const total = latest.strongBuy + latest.buy + latest.hold + latest.sell + latest.strongSell;
-
     if (total > 0) {
-      const bullishPct = ((latest.strongBuy + latest.buy) / total) * 100;
-      const bearishPct = ((latest.sell + latest.strongSell) / total) * 100;
-
-      // Map bullish percentage to 0-15 points with NON-LINEAR curve
-      // Rewards strong consensus (>80%) and penalizes bearish consensus (<30%)
-      let recPoints = 0;
-      if (bullishPct >= 85) {
-        recPoints = 14 + (bullishPct - 85) / 15; // 14-15 points for 85-100%
-      } else if (bullishPct >= 70) {
-        recPoints = 11 + (bullishPct - 70) / 5; // 11-14 points for 70-85%
-      } else if (bullishPct >= 55) {
-        recPoints = 8 + (bullishPct - 55) / 5; // 8-11 points for 55-70%
-      } else if (bullishPct >= 40) {
-        recPoints = 5 + (bullishPct - 40) / 5; // 5-8 points for 40-55%
-      } else if (bullishPct >= 25) {
-        recPoints = 2.5 + (bullishPct - 25) / 6; // 2.5-5 points for 25-40%
-      } else {
-        recPoints = (bullishPct / 25) * 2.5; // 0-2.5 points for 0-25%
-      }
-
-      // Price target upside (0-5 points) - MORE AGGRESSIVE
-      let targetPoints = 1; // Default neutral (reduced from 2.5)
-      if (priceTarget?.targetMean) {
-        const upside = ((priceTarget.targetMean - quote.c) / quote.c) * 100;
-        
-        if (upside > 30) targetPoints = 5; // Huge upside
-        else if (upside > 20) targetPoints = 4.5; // Large upside
-        else if (upside > 10) targetPoints = 3.5; // Good upside
-        else if (upside > 5) targetPoints = 2.5; // Modest upside
-        else if (upside > 0) targetPoints = 1.5; // Small upside
-        else if (upside > -5) targetPoints = 0.5; // Small downside
-        else targetPoints = 0; // Downside risk
-
-        detail = `${bullishPct.toFixed(0)}% bullish (${latest.strongBuy + latest.buy}/${total}), ${upside.toFixed(1)}% to target`;
-      } else {
-        detail = `${bullishPct.toFixed(0)}% bullish consensus (${latest.strongBuy + latest.buy}/${total} analysts)`;
-      }
-
-      score = Math.round(recPoints + targetPoints);
-      percentile = Math.round(bullishPct);
-      
-      tooltip = bearishPct > 30
-        ? `${bearishPct.toFixed(0)}% bearish - analyst concerns present`
-        : bullishPct > 70
-        ? 'Strong bullish consensus - high analyst confidence'
-        : 'Mixed analyst sentiment';
+      // Weighted mean on a 1 (strong sell) to 5 (strong buy) scale.
+      const weighted =
+        (latest.strongBuy * 5 + latest.buy * 4 + latest.hold * 3 + latest.sell * 2 + latest.strongSell) /
+        total;
+      ratingPoints = ((weighted - 1) / 4) * 12;
+      const bullish = latest.strongBuy + latest.buy;
+      ratingDetail = `${bullish}/${total} analysts rate Buy or better (consensus ${weighted.toFixed(1)}/5)`;
     }
   }
 
-  return { score, detail, tooltip, percentile };
+  let upsidePoints = 4; // neutral default out of 8
+  let upsideDetail = 'No price target available';
+
+  const current = quote?.c;
+  const target = priceTarget?.targetMean;
+  if (current && target && current > 0 && target > 0) {
+    const upside = ((target - current) / current) * 100;
+    // -20% upside -> 0 points, +40% -> 8 points, linear between.
+    upsidePoints = Math.max(0, Math.min(8, ((upside + 20) / 60) * 8));
+    upsideDetail = `Mean target ${target.toFixed(2)} implies ${upside >= 0 ? '+' : ''}${upside.toFixed(1)}% versus ${current.toFixed(2)}`;
+  }
+
+  return {
+    score: Math.round(ratingPoints + upsidePoints),
+    detail: `${ratingDetail}. ${upsideDetail}`,
+    tooltip: 'Analyst consensus rating and mean price target. Absolute rather than peer-relative.',
+    percentile: null,
+    peerBased: false,
+  };
 }
 
 /**
- * Main function: Calculate comprehensive, context-aware stock score
+ * Compose the five factors into a 0-100 score.
  */
 export function calculateIntelligentStockScore(
   symbol: string,
@@ -743,58 +384,52 @@ export function calculateIntelligentStockScore(
   financials: FinnhubBasicFinancials | null,
   recommendations: FinnhubRecommendationTrend[],
   priceTarget: FinnhubPriceTarget | null,
-  peerMetrics: PeerMetrics[],
+  peerResult: PeerMetricsResult,
   industry: string
 ): { score: number; breakdown: ScoreBreakdown; benchmarks: IndustryBenchmarks } {
-  
-  // Calculate industry benchmarks
-  const benchmarks = calculateIndustryBenchmarks(peerMetrics, industry);
+  const peers = peerResult.peers;
+  const benchmarks = calculateIndustryBenchmarks(peers, industry, peerResult.complete);
 
-  // Calculate each component score
-  const growth = calculateGrowthScore(financials, peerMetrics, benchmarks);
-  const profitability = calculateProfitabilityScore(financials, peerMetrics, benchmarks);
-  const valuation = calculateValuationScore(financials, peerMetrics, benchmarks);
-  const quality = calculateQualityScore(financials, peerMetrics, benchmarks);
+  const growth = calculateGrowthScore(financials, peers, benchmarks);
+  const profitability = calculateProfitabilityScore(financials, peers, benchmarks);
+  const valuation = calculateValuationScore(financials, peers, benchmarks);
+  const quality = calculateQualityScore(financials, peers, benchmarks);
   const analyst = calculateAnalystScore(quote, recommendations, priceTarget);
 
-  // Calculate base total score
-  let totalScore = growth.score + profitability.score + valuation.score + quality.score + analyst.score;
+  const total =
+    growth.score + profitability.score + valuation.score + quality.score + analyst.score;
+  const score = Math.max(0, Math.min(100, Math.round(total)));
 
-  // COMPOUND EXCELLENCE MULTIPLIER
-  // Companies that excel in multiple areas get a bonus boost
-  // This pushes truly exceptional companies from 70-75 range into 80-95 range
-  const scores = [growth.score, profitability.score, valuation.score, quality.score, analyst.score];
-  const strongScores = scores.filter(s => s >= 15).length; // Count metrics scoring 15+ (75th percentile)
-  const excellentScores = scores.filter(s => s >= 17).length; // Count metrics scoring 17+ (85th percentile)
-  
-  let multiplierBonus = 0;
-  
-  if (excellentScores >= 4) {
-    // 4-5 excellent scores = elite company, add +15 bonus
-    multiplierBonus = 15;
-  } else if (excellentScores >= 3) {
-    // 3 excellent scores = very strong company, add +12 bonus
-    multiplierBonus = 12;
-  } else if (strongScores >= 4) {
-    // 4-5 strong scores = strong company, add +8 bonus
-    multiplierBonus = 8;
-  } else if (strongScores >= 3) {
-    // 3 strong scores = above average company, add +5 bonus
-    multiplierBonus = 5;
+  // Confidence reflects how much of the score rested on real comparisons.
+  const caveats: string[] = [];
+  const peerBackedFactors = [growth, profitability, valuation, quality].filter((f) => f.peerBased).length;
+
+  if (!financials?.metric) {
+    caveats.push('Fundamental metrics were unavailable, so most factors fell back to neutral defaults.');
   }
-  
-  // Also penalize companies with multiple weak areas
-  const weakScores = scores.filter(s => s <= 5).length; // Count metrics scoring ≤5 (25th percentile)
-  
-  if (weakScores >= 3) {
-    // 3+ weak areas = serious concerns, subtract -10
-    multiplierBonus -= 10;
-  } else if (weakScores >= 2) {
-    // 2 weak areas = concerning, subtract -5
-    multiplierBonus -= 5;
+  if (!peerResult.complete) {
+    caveats.push(
+      peerResult.degradedReason
+        ? `Industry comparison is limited: ${peerResult.degradedReason}.`
+        : 'Industry comparison is limited by missing peer data.'
+    );
   }
-  
-  totalScore = Math.max(0, Math.min(100, totalScore + multiplierBonus));
+  if (!recommendations?.length) {
+    caveats.push('No analyst coverage was returned for this symbol.');
+  }
+
+  let confidence: 'high' | 'medium' | 'low';
+  if (!financials?.metric || peerBackedFactors === 0) {
+    confidence = 'low';
+  } else if (peerResult.complete && peerBackedFactors >= 3) {
+    confidence = 'high';
+  } else {
+    confidence = 'medium';
+  }
+
+  const description = peerResult.complete
+    ? `Scored against ${peers.length} ${industry} peers using median-based normalisation.`
+    : `Limited peer data (${peers.length} of ${peerResult.requested} resolved). Factors without a peer baseline were scored against absolute thresholds.`;
 
   const breakdown: ScoreBreakdown = {
     growthScore: growth.score,
@@ -802,7 +437,9 @@ export function calculateIntelligentStockScore(
     valuationScore: valuation.score,
     qualityScore: quality.score,
     analystScore: analyst.score,
-    description: `Context-aware analysis vs ${benchmarks.peerCount} ${industry} peers using z-score normalization${multiplierBonus !== 0 ? ` (${multiplierBonus > 0 ? '+' : ''}${multiplierBonus} compound ${multiplierBonus > 0 ? 'excellence' : 'concern'} adjustment)` : ''}`,
+    description,
+    confidence,
+    caveats,
     details: {
       growth: growth.detail,
       profitability: profitability.detail,
@@ -830,9 +467,5 @@ export function calculateIntelligentStockScore(
     },
   };
 
-  return {
-    score: Math.round(totalScore),
-    breakdown,
-    benchmarks,
-  };
+  return { score, breakdown, benchmarks };
 }
