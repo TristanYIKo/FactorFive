@@ -34,7 +34,7 @@
  *                       belong to a per-company feed, not a market calendar.
  */
 
-import { fetchMacroReleases, type Impact } from './fred';
+import { fetchMacroReleases, fredConfigured, type Impact } from './fred';
 
 export type EventCategory = 'Economic Data' | 'Holiday' | 'Market Structure';
 
@@ -206,13 +206,29 @@ function optionsExpirations(year: number): MarketEvent[] {
 const FRED_URL = 'https://fred.stlouisfed.org/releases';
 
 /**
+ * What the calendar was actually able to load.
+ *
+ * Returned alongside the events because partial failure here is silent
+ * otherwise: holidays and options expirations are computed locally and always
+ * succeed, so a missing FRED key still yields a populated-looking calendar with
+ * every economic release quietly absent. The UI has to be able to say so.
+ */
+export interface CalendarResult {
+  events: MarketEvent[];
+  macro:
+    | { status: 'ok'; releaseCount: number }
+    | { status: 'not-configured' }
+    | { status: 'unavailable' };
+}
+
+/**
  * The calendar for a rolling window around `reference`: one month back so recent
  * releases stay visible, twelve months forward.
  *
  * Async because macro releases are fetched. Server-side only — it reads
  * FRED_API_KEY. Cached upstream, so repeat calls cost nothing.
  */
-export async function getMarketCalendar(reference: Date = new Date()): Promise<MarketEvent[]> {
+export async function getMarketCalendar(reference: Date = new Date()): Promise<CalendarResult> {
   const from = new Date(reference);
   from.setMonth(from.getMonth() - 1);
   const to = new Date(reference);
@@ -243,9 +259,17 @@ export async function getMarketCalendar(reference: Date = new Date()): Promise<M
     defined.push(...marketHolidays(y), ...optionsExpirations(y));
   }
 
-  return [...macro, ...defined]
+  const events = [...macro, ...defined]
     .filter((e) => e.date >= fromKey && e.date <= toKeyStr)
     .sort((a, b) => a.date.localeCompare(b.date) || impactRank(a.impact) - impactRank(b.impact));
+
+  const macroStatus: CalendarResult['macro'] = !fredConfigured()
+    ? { status: 'not-configured' }
+    : macro.length === 0
+      ? { status: 'unavailable' }
+      : { status: 'ok', releaseCount: macro.length };
+
+  return { events, macro: macroStatus };
 }
 
 function impactRank(impact: Impact): number {

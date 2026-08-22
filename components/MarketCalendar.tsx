@@ -17,6 +17,7 @@ import {
   indexByDate,
   dateKey,
   toLocalDate,
+  type CalendarResult,
   type MarketEvent,
 } from '@/lib/marketCalendar';
 
@@ -46,7 +47,13 @@ function sourceLabel(source: MarketEvent['source']): string {
     : source.rule;
 }
 
-export default function MarketCalendar({ events }: { events: MarketEvent[] }) {
+export default function MarketCalendar({
+  events,
+  macro,
+}: {
+  events: MarketEvent[];
+  macro: CalendarResult['macro'];
+}) {
   const [view, setView] = useState<'upcoming' | 'month'>('upcoming');
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState<string | null>(null);
@@ -131,6 +138,25 @@ export default function MarketCalendar({ events }: { events: MarketEvent[] }) {
           ))}
         </div>
       </header>
+
+      {/* Holidays and options expirations are computed locally and always
+          succeed, so a missing FRED key yields a calendar that looks populated
+          while every economic release is quietly absent. Say so explicitly. */}
+      {macro.status !== 'ok' && (
+        <div
+          className="border-b px-5 py-3"
+          style={{ borderColor: 'var(--border)', background: 'var(--warning-soft)' }}
+        >
+          <p className="text-[12.5px] font-semibold" style={{ color: 'var(--warning)' }}>
+            Economic releases are not being shown
+          </p>
+          <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: 'var(--text-secondary)' }}>
+            {macro.status === 'not-configured'
+              ? 'FRED_API_KEY is not set on this deployment, so CPI, PCE, payrolls and the other agency releases cannot be loaded. Holidays and options expirations below are computed locally and remain accurate.'
+              : 'FRED could not be reached, so agency release dates are temporarily unavailable. Holidays and options expirations below are computed locally and remain accurate.'}
+          </p>
+        </div>
+      )}
 
       {view === 'upcoming' ? (
         <ul className="divide-y" style={{ borderColor: 'var(--border)' }}>

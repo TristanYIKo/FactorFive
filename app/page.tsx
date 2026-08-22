@@ -40,6 +40,17 @@ const FACTORS = [
   },
 ];
 
+/**
+ * Regenerate hourly.
+ *
+ * Without this the route is fully static, so the calendar is baked in at build
+ * time and frozen there — the "upcoming" list would keep showing the same dates
+ * as they slid into the past, and a newly added FRED key would not take effect
+ * until the next deploy. An hour is far finer than the data moves (agencies
+ * publish schedules months ahead) while keeping the window rolling.
+ */
+export const revalidate = 3600;
+
 const POPULAR = ['AAPL', 'MSFT', 'NVDA', 'GOOGL', 'AMZN', 'META', 'TSLA', 'JPM'];
 
 export default function Home() {
@@ -169,8 +180,8 @@ export default function Home() {
 
 /** Fetches on the server so FRED_API_KEY never reaches the browser. */
 async function CalendarSection() {
-  const events = await getMarketCalendar();
-  return <MarketCalendar events={events} />;
+  const { events, macro } = await getMarketCalendar();
+  return <MarketCalendar events={events} macro={macro} />;
 }
 
 function CalendarSkeleton() {
