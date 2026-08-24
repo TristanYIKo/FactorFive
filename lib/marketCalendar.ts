@@ -203,7 +203,14 @@ function optionsExpirations(year: number): MarketEvent[] {
 
 // --- assembly --------------------------------------------------------------
 
-const FRED_URL = 'https://fred.stlouisfed.org/releases';
+/**
+ * FRED's release pages live at `release?rid=N` — a query parameter, not a path
+ * segment. An earlier version constructed `/releases/{id}`, which 404s for every
+ * release; the source links under each economic event all led to an error page.
+ * Verified against all 11 release IDs in MACRO_RELEASES.
+ */
+const fredReleaseUrl = (releaseId: number) =>
+  `https://fred.stlouisfed.org/release?rid=${releaseId}`;
 
 /**
  * What the calendar was actually able to load.
@@ -250,7 +257,7 @@ export async function getMarketCalendar(reference: Date = new Date()): Promise<C
       kind: 'published',
       agency: r.spec.agency,
       via: 'FRED',
-      url: `${FRED_URL}/${r.releaseId}`,
+      url: fredReleaseUrl(r.releaseId),
     },
   }));
 
