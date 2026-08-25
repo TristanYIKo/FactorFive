@@ -50,22 +50,50 @@
   --factor-analyst: #db2777;
 
   /* --- depth ----------------------------------------------------------- */
-  --shadow-sm: 0 1px 2px rgba(11, 13, 18, 0.05);
-  --shadow-md: 0 2px 4px rgba(11, 13, 18, 0.05), 0 4px 12px rgba(11, 13, 18, 0.05);
-  --shadow-lg: 0 4px 8px rgba(11, 13, 18, 0.05), 0 12px 32px rgba(11, 13, 18, 0.08);
+  --shadow-sm: 0 1px 1px rgba(11, 13, 18, 0.03);
+  --shadow-md: 0 1px 2px rgba(11, 13, 18, 0.05);
+  --shadow-lg: 0 8px 28px rgba(11, 13, 18, 0.12);
 
-  /* --- radii ----------------------------------------------------------- */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  /* --- radii -----------------------------------------------------------
+     Tightened for the dense institutional look. Large radii on data-bearing
+     surfaces are the single strongest "generic template" tell; terminals and
+     trading tools sit between 4 and 8px. */
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 7px;
+  --radius-xl: 10px;
+
+  /* --- hairlines --------------------------------------------------------
+     Structure comes from 1px rules, not elevation. Two weights: `hairline`
+     separates rows inside a surface, `hairline-strong` separates surfaces. */
+  --hairline: rgba(11, 13, 18, 0.07);
+  --hairline-strong: rgba(11, 13, 18, 0.13);
+
+  /* --- density scale ----------------------------------------------------
+     A 4px base with a deliberately compressed type ramp. Body copy sits at
+     13px and numerics at 12-13px, which is where scannable tables live. */
+  --step-1: 4px;
+  --step-2: 8px;
+  --step-3: 12px;
+  --step-4: 16px;
+  --step-5: 24px;
+  --step-6: 32px;
+
+  --text-2xs: 10.5px;
+  --text-xs: 11.5px;
+  --text-sm: 12.5px;
+  --text-base: 13.5px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
 
   /* --- motion ---------------------------------------------------------- */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --dur-fast: 120ms;
-  --dur-base: 220ms;
-  --dur-slow: 420ms;
+  --dur-fast: 90ms;
+  --dur-base: 140ms;
+  --dur-slow: 240ms;
 }
 
 /* Dark palette. Guarded so an explicit light choice always wins, and applied
@@ -85,6 +113,8 @@
 
     --border: #23262f;
     --border-strong: #33384a;
+    --hairline: rgba(255, 255, 255, 0.07);
+    --hairline-strong: rgba(255, 255, 255, 0.12);
 
     --accent: #7c74ff;
     --accent-hover: #918bff;
@@ -126,6 +156,8 @@
 
   --border: #23262f;
   --border-strong: #33384a;
+  --hairline: rgba(255, 255, 255, 0.07);
+  --hairline-strong: rgba(255, 255, 255, 0.12);
 
   --accent: #7c74ff;
   --accent-hover: #918bff;
@@ -166,6 +198,8 @@
 
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
 
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
@@ -353,4 +387,66 @@ a {
 *::-webkit-scrollbar-thumb:hover {
   background: var(--text-tertiary);
   background-clip: content-box;
+}
+
+/* ==========================================================================
+   Tabs (Radix)
+
+   Panels are rendered with forceMount so switching is instant and scroll
+   position survives, which means visibility is ours to manage — Radix only
+   sets data-state. `display: none` on inactive panels already removes them
+   from layout and paint, so no further containment is needed.
+   ========================================================================== */
+
+.ff-tab-panel[data-state='inactive'] {
+  display: none;
+}
+
+.ff-tab {
+  color: var(--text-tertiary);
+  transition: color var(--dur-fast) ease;
+}
+
+.ff-tab:hover {
+  color: var(--text-secondary);
+}
+
+.ff-tab[data-state='active'] {
+  color: var(--text-primary);
+}
+
+/* The indicator scales rather than animating width/left, so it never triggers
+   layout. Inactive tabs keep the element at scale 0 to hold the same box. */
+.ff-tab-rule {
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.ff-tab[data-state='active'] .ff-tab-rule {
+  transform: scaleX(1);
+}
+
+.ff-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+/* Horizontal rails hide their scrollbar but stay scrollable and keyboard
+   reachable. */
+.ff-rail::-webkit-scrollbar {
+  display: none;
+}
+.ff-rail {
+  scrollbar-width: none;
+}
+
+/* Table rows: hover is a background shift only — no transform, no border
+   change, nothing that could reflow a dense grid. */
+.ff-row {
+  transition: background var(--dur-fast) ease;
+}
+.ff-row:hover {
+  background: var(--bg-subtle);
 }
