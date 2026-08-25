@@ -136,7 +136,7 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
 
   try {
     // ---- Hop 1: everything that only needs the symbol ---------------------
-    const [quote, profile, news, metric, recommendations, priceTarget, peerList] =
+    const [quote, profile, news, metric, recommendations, priceTarget, peerList, earnings] =
       await Promise.all([
         finnhub.quote(symbol),
         finnhub.profile(symbol),
@@ -145,6 +145,7 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
         finnhub.recommendations(symbol),
         finnhub.priceTarget(symbol),
         finnhub.peers(symbol),
+        finnhub.earningsHistory(symbol),
       ]);
 
     if (!profile?.name) {
@@ -196,6 +197,10 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
         financials: trimmedFinancials,
         recommendations: recommendations.data,
         priceTarget: priceTarget.data,
+        earningsHistory: (earnings.data ?? [])
+          .slice()
+          .sort((a, b) => (b.period ?? '').localeCompare(a.period ?? ''))
+          .slice(0, 8),
         stockScore: scored.score,
         scoreBreakdown: scored.breakdown,
         industryBenchmarks: scored.benchmarks,

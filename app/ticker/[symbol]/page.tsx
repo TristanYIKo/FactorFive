@@ -21,6 +21,10 @@ import { ScorePanel } from '@/components/stock/ScorePanel';
 import { MarketContextPanel } from '@/components/stock/MarketContextPanel';
 import { PeerBenchmarks } from '@/components/stock/PeerBenchmarks';
 import { SentimentPanel, AnalystPanel, NewsPanel } from '@/components/stock/NewsPanel';
+import { DetailTabs } from '@/components/stock/DetailTabs';
+import { CoreMetrics } from '@/components/stock/panels/CoreMetrics';
+import { EarningsHistory } from '@/components/stock/panels/EarningsHistory';
+import { StatementsGap, TechnicalsGap, OwnershipGap } from '@/components/stock/panels/DataGaps';
 import { Card, Skeleton, EmptyState } from '@/components/ui/Primitives';
 
 export async function generateMetadata({
@@ -112,28 +116,74 @@ async function StockContent({ symbol }: { symbol: string }) {
 
   const d = result.data;
 
+  const tabs = [
+    {
+      id: 'overview',
+      label: 'Overview',
+      content: (
+        <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr] lg:items-start">
+          <div className="space-y-3">
+            <ScorePanel score={d.stockScore} breakdown={d.scoreBreakdown} dataQuality={d.dataQuality} />
+          </div>
+          <div className="space-y-3">
+            <MarketContextPanel context={d.marketContext} />
+            <AnalystPanel recommendations={d.recommendations} />
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'metrics',
+      label: 'Metrics',
+      content: <CoreMetrics financials={d.financials} profile={d.profile} />,
+    },
+    {
+      id: 'peers',
+      label: 'Peers',
+      badge: d.dataQuality?.peersResolved ? String(d.dataQuality.peersResolved) : undefined,
+      content: (
+        <PeerBenchmarks
+          benchmarks={d.industryBenchmarks}
+          financials={d.financials}
+          dataQuality={d.dataQuality}
+        />
+      ),
+    },
+    {
+      id: 'earnings',
+      label: 'Earnings',
+      badge: d.earningsHistory?.length ? String(d.earningsHistory.length) : undefined,
+      content: <EarningsHistory history={d.earningsHistory} />,
+    },
+    {
+      id: 'news',
+      label: 'News',
+      badge: d.news?.length ? String(d.news.length) : undefined,
+      content: (
+        <div className="grid gap-3 lg:grid-cols-[1fr_1.35fr] lg:items-start">
+          <SentimentPanel sentiment={d.sentiment} articles={d.newsAPIArticles} />
+          <NewsPanel news={d.news} />
+        </div>
+      ),
+    },
+    {
+      id: 'statements',
+      label: 'Statements',
+      content: (
+        <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
+          <StatementsGap />
+          <TechnicalsGap />
+          <OwnershipGap />
+        </div>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-5 pt-6">
+    <div className="space-y-3 pt-4">
       <PriceHeader symbol={d.symbol} profile={d.profile} quote={d.quote} financials={d.financials} />
 
-      <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr] lg:items-start">
-        <div className="space-y-5">
-          <ScorePanel score={d.stockScore} breakdown={d.scoreBreakdown} dataQuality={d.dataQuality} />
-          <PeerBenchmarks
-            benchmarks={d.industryBenchmarks}
-            financials={d.financials}
-            dataQuality={d.dataQuality}
-          />
-        </div>
-
-        <div className="space-y-5">
-          <MarketContextPanel context={d.marketContext} />
-          <SentimentPanel sentiment={d.sentiment} articles={d.newsAPIArticles} />
-          <AnalystPanel recommendations={d.recommendations} />
-        </div>
-      </div>
-
-      <NewsPanel news={d.news} />
+      <DetailTabs tabs={tabs} />
 
       {d.dataQuality && (
         <p className="tabular pt-1 text-center text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>

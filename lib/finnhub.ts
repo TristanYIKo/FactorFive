@@ -27,6 +27,7 @@ import type {
   FinnhubRecommendationTrend,
   FinnhubPriceTarget,
   PeerMetrics,
+  EarningsSurprise,
 } from '@/types/stock';
 import { upstreamJson, upstreamJsonOptional, UpstreamError } from './upstream';
 
@@ -134,6 +135,14 @@ export const finnhub = {
     getOptional<FinnhubPriceTarget | null>('/stock/price-target', { symbol }, TTL.priceTarget, null),
 
   peers: (symbol: string) => getOptional<string[]>('/stock/peers', { symbol }, TTL.peers, []),
+
+  /**
+   * Reported quarters with estimate, actual and surprise. Distinct from
+   * /calendar/earnings, which is forward-looking and carries no confirmation
+   * flag; this one is history, so every row is a fact.
+   */
+  earningsHistory: (symbol: string) =>
+    getOptional<EarningsSurprise[]>('/stock/earnings', { symbol }, TTL.recommendation, []),
 };
 
 /**

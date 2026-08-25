@@ -183,6 +183,8 @@ export interface StockData {
   industryBenchmarks?: IndustryBenchmarks;
   dataQuality?: DataQuality;
   marketContext?: MarketContext;
+  /** Most recent reported quarters, newest first. */
+  earningsHistory?: EarningsSurprise[];
 }
 
 /**
@@ -204,6 +206,21 @@ export interface DataQuality {
   financialsAvailable: boolean;
   generatedAt: string;
   elapsedMs: number;
+}
+
+/**
+ * One reported quarter from /stock/earnings, which carries the actual figure
+ * alongside the estimate and the surprise. Verified available on the free tier.
+ */
+export interface EarningsSurprise {
+  symbol: string;
+  period: string; // YYYY-MM-DD, quarter end
+  year: number;
+  quarter: number;
+  estimate: number | null;
+  actual: number | null;
+  surprise: number | null;
+  surprisePercent: number | null;
 }
 
 // Finnhub Basic Financials (annual and quarterly metrics)
