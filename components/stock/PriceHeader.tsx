@@ -97,7 +97,7 @@ export function PriceHeader({
       <div className="mt-6 grid grid-cols-2 gap-4 border-t pt-5 sm:grid-cols-4"
         style={{ borderColor: 'var(--border)' }}>
         <Stat label="Open" value={quote.o ? `$${quote.o.toFixed(2)}` : '—'} />
-        <Stat label="Day range" value={quote.l && quote.h ? `$${quote.l.toFixed(2)} – $${quote.h.toFixed(2)}` : '—'} />
+        <Stat label="Day range" value={quote.l && quote.h ? `$${quote.l.toFixed(2)} - $${quote.h.toFixed(2)}` : '—'} />
         <Stat label="Prev close" value={quote.pc ? `$${quote.pc.toFixed(2)}` : '—'} />
         <Stat label="Market cap" value={marketCap ? formatCurrency(marketCap) : '—'} />
       </div>

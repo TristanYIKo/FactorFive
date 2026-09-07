@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'FactorFive — five-factor equity analysis',
+    default: 'FactorFive: five-factor equity analysis',
     template: '%s | FactorFive',
   },
   description:

@@ -86,7 +86,7 @@ export const MACRO_RELEASES: ReleaseSpec[] = [
     agency: 'Bureau of Economic Analysis',
     impact: 'high',
     description:
-      'Quarterly economic growth. Released in three passes — advance, second and third estimates — each revising the last.',
+      'Quarterly economic growth. Released in three passes (advance, second and third estimates), each revising the last.',
   },
   {
     id: 9,
@@ -129,7 +129,7 @@ export const MACRO_RELEASES: ReleaseSpec[] = [
     short: 'Housing Starts',
     agency: 'Census Bureau',
     impact: 'medium',
-    description: 'Housing starts and building permits — an early read on construction activity.',
+    description: 'Housing starts and building permits, an early read on construction activity.',
   },
   {
     id: 13,
@@ -145,7 +145,7 @@ export const MACRO_RELEASES: ReleaseSpec[] = [
     short: 'Import/Export Prices',
     agency: 'Bureau of Labor Statistics',
     impact: 'low',
-    description: 'Traded-goods prices — a channel through which currency moves reach inflation.',
+    description: 'Traded-goods prices, a channel through which currency moves reach inflation.',
   },
 ];
 

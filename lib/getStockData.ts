@@ -136,14 +136,13 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
 
   try {
     // ---- Hop 1: everything that only needs the symbol ---------------------
-    const [quote, profile, news, metric, recommendations, priceTarget, peerList, earnings] =
+    const [quote, profile, news, metric, recommendations, peerList, earnings] =
       await Promise.all([
         finnhub.quote(symbol),
         finnhub.profile(symbol),
         finnhub.news(symbol, isoDaysAgo(14), isoDaysAgo(0)),
         finnhub.metric(symbol),
         finnhub.recommendations(symbol),
-        finnhub.priceTarget(symbol),
         finnhub.peers(symbol),
         finnhub.earningsHistory(symbol),
       ]);
@@ -176,7 +175,6 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
       quote,
       metric.data,
       recommendations.data,
-      priceTarget.data,
       peerResult,
       profile.finnhubIndustry || 'Unknown'
     );
@@ -196,7 +194,6 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
         earnings: null,
         financials: trimmedFinancials,
         recommendations: recommendations.data,
-        priceTarget: priceTarget.data,
         earningsHistory: (earnings.data ?? [])
           .slice()
           .sort((a, b) => (b.period ?? '').localeCompare(a.period ?? ''))

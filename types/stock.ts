@@ -177,7 +177,6 @@ export interface StockData {
   earnings: EarningsEvent | null; // Next upcoming earnings
   financials: FinnhubBasicFinancials | null;
   recommendations: FinnhubRecommendationTrend[];
-  priceTarget: FinnhubPriceTarget | null;
   stockScore: number; // 0-100
   scoreBreakdown: ScoreBreakdown;
   industryBenchmarks?: IndustryBenchmarks;
@@ -295,16 +294,6 @@ export interface FinnhubRecommendationTrend {
   strongBuy: number;
   strongSell: number;
   symbol: string;
-}
-
-// Finnhub Price Target (analyst consensus)
-export interface FinnhubPriceTarget {
-  lastUpdated: string;
-  symbol: string;
-  targetHigh: number;
-  targetLow: number;
-  targetMean: number;
-  targetMedian: number;
 }
 
 // NewsAPI Article

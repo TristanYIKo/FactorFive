@@ -7,7 +7,7 @@
  */
 
 import type { EarningsSurprise } from '@/types/stock';
-import { Panel, PanelHeader, Tag, DeltaBadge, Sparkline, NotOnPlan } from '@/components/ui/Dense';
+import { Panel, PanelHeader, Tag, DeltaBadge, Sparkline } from '@/components/ui/Dense';
 
 function quarterLabel(row: EarningsSurprise): string {
   return `Q${row.quarter} ${row.year}`;
@@ -18,11 +18,12 @@ export function EarningsHistory({ history }: { history?: EarningsSurprise[] }) {
     return (
       <Panel>
         <PanelHeader title="Earnings history" />
-        <NotOnPlan
-          what="Reported earnings history"
-          endpoint="/stock/earnings"
-          detail="No reported quarters were returned for this symbol."
-        />
+        <p
+          className="px-3 py-6 text-center text-[12.5px]"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          No reported quarters for this symbol yet.
+        </p>
       </Panel>
     );
   }

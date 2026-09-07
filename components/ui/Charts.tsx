@@ -105,6 +105,28 @@ export function ScoreGauge({
 /* ----------------------------------------------------------- factor bar -- */
 
 /**
+ * Ordinal suffix for a whole number.
+ *
+ * The percentile label previously hard-coded "th", which read as "81th pct"
+ * and "43rd" never appeared at all. The teens are the special case: 11, 12 and
+ * 13 take "th" despite ending in 1, 2 and 3.
+ */
+function ordinal(n: number): string {
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+/**
  * One factor's 0-20 score, with an optional peer-percentile marker.
  *
  * The marker is the important part: the bar says how many points the factor
@@ -165,7 +187,7 @@ export function FactorBar({
             />
           </div>
           <span className="tabular text-[11px] whitespace-nowrap" style={{ color: 'var(--text-tertiary)' }}>
-            {Math.round(percentile)}th pct
+            {ordinal(Math.round(percentile))} pct
           </span>
         </div>
       )}
@@ -336,7 +358,7 @@ export function DistributionStrip({
       <div className="flex items-center gap-2 py-1">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: 'var(--accent)' }} />
         <span className="text-[12px]" style={{ color: 'var(--text-tertiary)' }}>
-          All peers at or beyond {format(median)} — distribution too concentrated to rank against.
+          All peers at or beyond {format(median)}. Distribution too concentrated to rank against.
         </span>
       </div>
     );

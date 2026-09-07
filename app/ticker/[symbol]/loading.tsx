@@ -14,7 +14,7 @@ export default function Loading() {
           <div className="flex items-center gap-2">
             <span
               className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[12px] font-bold"
-              style={{ background: 'var(--accent)', color: '#fff' }}
+              style={{ background: 'var(--accent)', color: 'var(--text-inverse)' }}
             >
               F5
             </span>

@@ -10,7 +10,6 @@
  *   news         15m   - headlines do not need second-level freshness
  *   metric       12h   - fundamentals update quarterly
  *   recommend    12h   - analyst ratings move slowly
- *   priceTarget  12h   - same
  *   profile      7d    - name, logo, industry, share count
  *   peers        30d   - peer sets are effectively static
  *
@@ -25,7 +24,6 @@ import type {
   FinnhubNewsArticle,
   FinnhubBasicFinancials,
   FinnhubRecommendationTrend,
-  FinnhubPriceTarget,
   PeerMetrics,
   EarningsSurprise,
 } from '@/types/stock';
@@ -39,7 +37,6 @@ export const TTL = {
   news: 60 * 15,
   metric: 60 * 60 * 12,
   recommendation: 60 * 60 * 12,
-  priceTarget: 60 * 60 * 12,
   profile: 60 * 60 * 24 * 7,
   peers: 60 * 60 * 24 * 30,
 } as const;
@@ -131,8 +128,6 @@ export const finnhub = {
       []
     ),
 
-  priceTarget: (symbol: string) =>
-    getOptional<FinnhubPriceTarget | null>('/stock/price-target', { symbol }, TTL.priceTarget, null),
 
   peers: (symbol: string) => getOptional<string[]>('/stock/peers', { symbol }, TTL.peers, []),
 

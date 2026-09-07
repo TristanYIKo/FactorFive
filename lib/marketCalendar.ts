@@ -145,7 +145,7 @@ function marketHolidays(year: number): MarketEvent[] {
   const events: MarketEvent[] = holidays.map((h) => ({
     id: `holiday-${h.date}`,
     date: h.date,
-    title: `Market Closed — ${h.name}`,
+    title: `Market Closed: ${h.name}`,
     description: 'U.S. equity markets are closed. Bond markets follow a separate SIFMA schedule.',
     category: 'Holiday' as const,
     impact: 'low' as const,
@@ -160,7 +160,7 @@ function marketHolidays(year: number): MarketEvent[] {
   events.push({
     id: `halfday-${blackFriday}`,
     date: blackFriday,
-    title: 'Early Close — 1:00 PM ET',
+    title: 'Early Close: 1:00 PM ET',
     description: 'Shortened session the day after Thanksgiving. Volume is typically very light.',
     category: 'Holiday',
     impact: 'low',

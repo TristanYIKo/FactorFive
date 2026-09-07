@@ -555,9 +555,10 @@ export async function upstreamJsonOptional<T>(
 
     // 403 and 404 are statements about entitlement or existence, not transient
     // faults - they will answer identically for as long as the plan does.
-    // Finnhub's /stock/price-target is premium-only, so on a free key every
-    // single page view was spending a rate-limited request to be told "no"
-    // again. Remember the answer.
+    // This was written for Finnhub's premium-only /stock/price-target, which
+    // spent a rate-limited request on every page view to be told "no" again.
+    // That endpoint is no longer called at all, but the guard stays: it is the
+    // general protection for any endpoint the current plan cannot reach.
     if (error.status === 403 || error.status === 404) {
       unavailableUntil.set(key, Date.now() + UNAVAILABLE_TTL_MS);
     }

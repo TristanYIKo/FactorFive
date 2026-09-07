@@ -28,7 +28,6 @@ import type {
   FinnhubQuote,
   FinnhubBasicFinancials,
   FinnhubRecommendationTrend,
-  FinnhubPriceTarget,
   PeerMetrics,
   IndustryBenchmarks,
   MetricDistribution,
@@ -329,16 +328,19 @@ function calculateQualityScore(
 }
 
 /**
- * ANALYST - consensus ratings and price-target upside.
+ * ANALYST - consensus ratings.
  * This factor is inherently absolute rather than peer-relative.
+ *
+ * This previously split its 20 points as 12 for ratings and 8 for price-target
+ * upside. `/stock/price-target` is premium-only, so on a free key the target
+ * was always null and every stock silently collected the same neutral 4 of
+ * those 8 points: a dead fifth of the factor that discriminated between
+ * nothing, cost an upstream call per symbol against a 60/minute ceiling, and
+ * printed "No price target available" on every page. Ratings now carry all 20.
  */
-function calculateAnalystScore(
-  quote: FinnhubQuote,
-  recommendations: FinnhubRecommendationTrend[],
-  priceTarget: FinnhubPriceTarget | null
-): FactorResult {
-  let ratingPoints = 6; // neutral default out of 12
-  let ratingDetail = 'No analyst ratings available';
+function calculateAnalystScore(recommendations: FinnhubRecommendationTrend[]): FactorResult {
+  let points = 10; // neutral default out of 20
+  let detail = 'No analyst ratings available';
 
   const latest = recommendations?.[0];
   if (latest) {
@@ -348,28 +350,16 @@ function calculateAnalystScore(
       const weighted =
         (latest.strongBuy * 5 + latest.buy * 4 + latest.hold * 3 + latest.sell * 2 + latest.strongSell) /
         total;
-      ratingPoints = ((weighted - 1) / 4) * 12;
+      points = ((weighted - 1) / 4) * 20;
       const bullish = latest.strongBuy + latest.buy;
-      ratingDetail = `${bullish}/${total} analysts rate Buy or better (consensus ${weighted.toFixed(1)}/5)`;
+      detail = `${bullish}/${total} analysts rate Buy or better (consensus ${weighted.toFixed(1)}/5)`;
     }
   }
 
-  let upsidePoints = 4; // neutral default out of 8
-  let upsideDetail = 'No price target available';
-
-  const current = quote?.c;
-  const target = priceTarget?.targetMean;
-  if (current && target && current > 0 && target > 0) {
-    const upside = ((target - current) / current) * 100;
-    // -20% upside -> 0 points, +40% -> 8 points, linear between.
-    upsidePoints = Math.max(0, Math.min(8, ((upside + 20) / 60) * 8));
-    upsideDetail = `Mean target ${target.toFixed(2)} implies ${upside >= 0 ? '+' : ''}${upside.toFixed(1)}% versus ${current.toFixed(2)}`;
-  }
-
   return {
-    score: Math.round(ratingPoints + upsidePoints),
-    detail: `${ratingDetail}. ${upsideDetail}`,
-    tooltip: 'Analyst consensus rating and mean price target. Absolute rather than peer-relative.',
+    score: Math.round(points),
+    detail,
+    tooltip: 'Analyst consensus rating across covering analysts. Absolute rather than peer-relative.',
     percentile: null,
     peerBased: false,
   };
@@ -383,7 +373,6 @@ export function calculateIntelligentStockScore(
   quote: FinnhubQuote,
   financials: FinnhubBasicFinancials | null,
   recommendations: FinnhubRecommendationTrend[],
-  priceTarget: FinnhubPriceTarget | null,
   peerResult: PeerMetricsResult,
   industry: string
 ): { score: number; breakdown: ScoreBreakdown; benchmarks: IndustryBenchmarks } {
@@ -394,7 +383,7 @@ export function calculateIntelligentStockScore(
   const profitability = calculateProfitabilityScore(financials, peers, benchmarks);
   const valuation = calculateValuationScore(financials, peers, benchmarks);
   const quality = calculateQualityScore(financials, peers, benchmarks);
-  const analyst = calculateAnalystScore(quote, recommendations, priceTarget);
+  const analyst = calculateAnalystScore(recommendations);
 
   const total =
     growth.score + profitability.score + valuation.score + quality.score + analyst.score;
