@@ -26,11 +26,26 @@
   --border: #e4e5ec;
   --border-strong: #d0d2dc;
 
-  /* --- brand ----------------------------------------------------------- */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-soft: rgba(79, 70, 229, 0.1);
-  --accent-text: #4338ca;
+  /* --- brand -----------------------------------------------------------
+     Ink chrome, data-only colour.
+
+     The accent was indigo (#4f46e5), which sat almost on top of
+     --factor-quality (#7c3aed): the chrome and the data were competing for the
+     same hue, so a coloured element could mean "brand" or "quality" and the
+     reader had no way to tell. The chrome is now neutral graphite and every
+     chroma in the palette belongs to the data - the five factors, and
+     positive/negative. If something on the page is coloured, it means
+     something.
+
+     --accent is also the focus ring and the active-tab rule, so it is kept at
+     full contrast against the page rather than tinted. Anything painted on
+     --accent must take its text colour from --text-inverse, never a literal
+     white: in dark mode --accent is near-white and a hard-coded #fff would be
+     invisible. */
+  --accent: #1e2128;
+  --accent-hover: #33383f;
+  --accent-soft: rgba(30, 33, 40, 0.07);
+  --accent-text: #1e2128;
 
   /* --- semantics ------------------------------------------------------- */
   --positive: #077d55;
@@ -116,10 +131,10 @@
     --hairline: rgba(255, 255, 255, 0.07);
     --hairline-strong: rgba(255, 255, 255, 0.12);
 
-    --accent: #7c74ff;
-    --accent-hover: #918bff;
-    --accent-soft: rgba(124, 116, 255, 0.14);
-    --accent-text: #a5a0ff;
+    --accent: #e8eaf0;
+    --accent-hover: #ffffff;
+    --accent-soft: rgba(232, 234, 240, 0.10);
+    --accent-text: #e8eaf0;
 
     --positive: #2ecc8f;
     --positive-soft: rgba(46, 204, 143, 0.13);
@@ -159,10 +174,10 @@
   --hairline: rgba(255, 255, 255, 0.07);
   --hairline-strong: rgba(255, 255, 255, 0.12);
 
-  --accent: #7c74ff;
-  --accent-hover: #918bff;
-  --accent-soft: rgba(124, 116, 255, 0.14);
-  --accent-text: #a5a0ff;
+  --accent: #e8eaf0;
+  --accent-hover: #ffffff;
+  --accent-soft: rgba(232, 234, 240, 0.10);
+  --accent-text: #e8eaf0;
 
   --positive: #2ecc8f;
   --positive-soft: rgba(46, 204, 143, 0.13);

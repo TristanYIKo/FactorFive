@@ -39,7 +39,7 @@ export default function Error({
           <button
             onClick={reset}
             className="rounded-[var(--radius-md)] px-4 py-2 text-[13.5px] font-medium transition-opacity hover:opacity-85"
-            style={{ background: 'var(--accent)', color: '#fff' }}
+            style={{ background: 'var(--accent)', color: 'var(--text-inverse)' }}
           >
             Try again
           </button>

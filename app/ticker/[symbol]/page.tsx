@@ -24,7 +24,6 @@ import { SentimentPanel, AnalystPanel, NewsPanel } from '@/components/stock/News
 import { DetailTabs } from '@/components/stock/DetailTabs';
 import { CoreMetrics } from '@/components/stock/panels/CoreMetrics';
 import { EarningsHistory } from '@/components/stock/panels/EarningsHistory';
-import { StatementsGap, TechnicalsGap, OwnershipGap } from '@/components/stock/panels/DataGaps';
 import { Card, Skeleton, EmptyState } from '@/components/ui/Primitives';
 
 export async function generateMetadata({
@@ -35,7 +34,7 @@ export async function generateMetadata({
   const { symbol } = await params;
   const upper = decodeURIComponent(symbol).toUpperCase();
   return {
-    title: `${upper} — FactorFive analysis`,
+    title: `${upper} analysis`,
     description: `Five-factor analysis of ${upper}: growth, profitability, valuation, quality and analyst consensus, benchmarked against size-matched industry peers.`,
   };
 }
@@ -74,7 +73,7 @@ function TopBar() {
         >
           <span
             className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[12px] font-bold"
-            style={{ background: 'var(--accent)', color: '#fff' }}
+            style={{ background: 'var(--accent)', color: 'var(--text-inverse)' }}
           >
             F5
           </span>
@@ -104,7 +103,7 @@ async function StockContent({ symbol }: { symbol: string }) {
             <Link
               href="/"
               className="inline-block rounded-[var(--radius-md)] px-4 py-2 text-[13.5px] font-medium transition-opacity hover:opacity-85"
-              style={{ background: 'var(--accent)', color: '#fff' }}
+              style={{ background: 'var(--accent)', color: 'var(--text-inverse)' }}
             >
               Back to search
             </Link>
@@ -163,17 +162,6 @@ async function StockContent({ symbol }: { symbol: string }) {
         <div className="grid gap-3 lg:grid-cols-[1fr_1.35fr] lg:items-start">
           <SentimentPanel sentiment={d.sentiment} articles={d.newsAPIArticles} />
           <NewsPanel news={d.news} />
-        </div>
-      ),
-    },
-    {
-      id: 'statements',
-      label: 'Statements',
-      content: (
-        <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
-          <StatementsGap />
-          <TechnicalsGap />
-          <OwnershipGap />
         </div>
       ),
     },
