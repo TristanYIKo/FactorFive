@@ -173,13 +173,9 @@ async function StockContent({ symbol }: { symbol: string }) {
 
       <DetailTabs tabs={tabs} />
 
-      {d.dataQuality && (
-        <p className="tabular pt-1 text-center text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>
-          Generated in {d.dataQuality.elapsedMs}ms ·{' '}
-          {new Date(d.dataQuality.generatedAt).toLocaleTimeString('en-US')} · Data from Finnhub and
-          NewsAPI · Not investment advice
-        </p>
-      )}
+      <p className="pt-1 text-center text-[11.5px]" style={{ color: 'var(--text-tertiary)' }}>
+        Data from Finnhub and NewsAPI · Not investment advice
+      </p>
     </div>
   );
 }
