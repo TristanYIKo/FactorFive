@@ -75,12 +75,33 @@ TTLs are set per resource by how fast the data actually moves, not uniformly:
 
 | Resource | TTL | Rationale |
 |---|---|---|
-| `quote` | 30s | The only genuinely live value on the page |
+| `quote` | 15s, memo only | The only genuinely live value on the page; never in the Data Cache (below) |
 | `company-news` | 15m | Headlines do not need second-level freshness |
 | `metric` | 12h | Fundamentals update quarterly |
 | `recommendation` | 12h | Analyst ratings move slowly |
 | `profile2` | 7d | Name, logo, industry, share count |
 | `peers` | 30d | Peer sets are effectively static |
+
+### The live price stays out of the Data Cache
+
+Next's Data Cache is **stale-while-revalidate**. Once an entry's `revalidate`
+lapses, the next reader is still handed the old value while a refresh runs in
+the background (`patch-fetch.js`, the `entry.isStale` branch). That is fine for
+fundamentals and fatal for a price: on a symbol nobody has opened since
+yesterday, "revalidate every 30 seconds" means "show yesterday's price". In
+production on 2026-11-20 META rendered a quote stamped 25 hours earlier, $624
+against a live $576, during market hours and across repeated requests.
+
+So `finnhub.quote` passes `dataCache: false`. It is fetched `no-store`, and only
+the in-process memo applies, whose expiry is hard. The worst case is now bounded
+by the TTL rather than by how recently someone visited.
+
+While a ticker page is open, `LiveQuote` re-checks `/api/quote` on the market's
+own clock (`lib/marketHours.ts`): every 15s in regular hours, every minute in
+pre-market and after-hours, every five minutes when closed. It does not poll at
+all while the tab is hidden and catches up when the tab is shown again. Each
+check costs at most one Finnhub request per symbol per 15 seconds per instance,
+and the route's `s-maxage=5` lets the CDN share it across instances.
 
 ### Scaling past one instance
 
