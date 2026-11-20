@@ -368,6 +368,22 @@ export interface UpstreamOptions {
   provider: 'finnhub' | 'news' | 'fred';
   /** Seconds Next should cache this response. 0 disables caching. */
   revalidate: number;
+  /**
+   * Whether Next's Data Cache may serve this response. Defaults to true.
+   *
+   * Turn it OFF for live values such as a price quote. The Data Cache is
+   * stale-while-revalidate: once an entry expires, the next reader is still
+   * handed the OLD value while a refresh runs in the background. On a page that
+   * is visited once a day, "revalidate every 30 seconds" therefore means "show
+   * whatever the last visitor saw, however long ago that was". Observed in
+   * production on 2026-11-20: META rendered a quote stamped 25 hours earlier,
+   * $624 against a live $576, during market hours and across repeated requests.
+   *
+   * With this off, the response is fetched with `no-store` and only the
+   * in-process memo applies, for `revalidate` seconds. That memo has a hard
+   * expiry, so the worst case is bounded by the TTL instead of by traffic.
+   */
+  dataCache?: boolean;
   /** Per-attempt timeout. */
   timeoutMs?: number;
   /** Attempts after the first. */
@@ -415,6 +431,7 @@ export async function upstreamJson<T>(url: string, opts: UpstreamOptions): Promi
     retries = 2,
     priority = 'high',
     deadlineAt = Date.now() + MAX_QUEUE_WAIT_MS,
+    dataCache = true,
   } = opts;
   const key = opts.key ?? url;
 
@@ -448,8 +465,10 @@ export async function upstreamJson<T>(url: string, opts: UpstreamOptions): Promi
           signal: controller.signal,
           // Next's Data Cache: shared across instances on Vercel and durable
           // across cold starts. This replaces the old per-instance Map that
-          // collapsed under exactly the load it was meant to absorb.
-          ...(revalidate > 0
+          // collapsed under exactly the load it was meant to absorb. Live
+          // values opt out, because it serves stale data on expiry - see
+          // `dataCache` in UpstreamOptions.
+          ...(dataCache && revalidate > 0
             ? { next: { revalidate } }
             : { cache: 'no-store' as const }),
         });

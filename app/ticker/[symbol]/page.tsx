@@ -15,6 +15,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getStockData } from '@/lib/getStockData';
+import { marketSession } from '@/lib/marketHours';
 import { TickerSearch } from '@/components/TickerSearch';
 import { PriceHeader } from '@/components/stock/PriceHeader';
 import { ScorePanel } from '@/components/stock/ScorePanel';
@@ -35,7 +36,7 @@ export async function generateMetadata({
   const upper = decodeURIComponent(symbol).toUpperCase();
   return {
     title: `${upper} analysis`,
-    description: `Five-factor analysis of ${upper}: growth, profitability, valuation, quality and analyst consensus, benchmarked against size-matched industry peers.`,
+    description: `Five-factor analysis of ${upper}: growth, quality, valuation, momentum and analyst consensus, benchmarked against size-matched industry peers.`,
   };
 }
 
@@ -169,7 +170,14 @@ async function StockContent({ symbol }: { symbol: string }) {
 
   return (
     <div className="space-y-3 pt-4">
-      <PriceHeader symbol={d.symbol} profile={d.profile} quote={d.quote} financials={d.financials} />
+      <PriceHeader
+        symbol={d.symbol}
+        profile={d.profile}
+        quote={d.quote}
+        financials={d.financials}
+        session={marketSession()}
+        renderedAt={Date.now()}
+      />
 
       <DetailTabs tabs={tabs} />
 

@@ -65,8 +65,13 @@ export function CoreMetrics({
       <Panel>
         <PanelHeader title="Balance sheet &amp; liquidity" />
         <div>
-          <DataRow label="Debt / equity" value={n(m.debtEquityAnnual)} />
-          <DataRow label="Current ratio" value={n(m.currentRatioAnnual)} />
+          {/* Finnhub sends no `debtEquityAnnual`, so this row read "—" for every
+              company. Total debt over total equity is the real field. */}
+          <DataRow
+            label="Debt / equity"
+            value={n(m['totalDebt/totalEquityQuarterly'] ?? m['totalDebt/totalEquityAnnual'])}
+          />
+          <DataRow label="Current ratio" value={n(m.currentRatioQuarterly ?? m.currentRatioAnnual)} />
           <DataRow label="Quick ratio" value={n(m.quickRatioAnnual)} />
           <DataRow label="Long-term debt / equity" value={n(m['longTermDebt/equityAnnual'])} />
           <DataRow label="Net interest coverage" value={n(m['netInterestCoverageAnnual'])} />

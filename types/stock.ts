@@ -73,12 +73,17 @@ export interface PeerMetrics {
   roa?: number;
   netMargin?: number;
   operatingMargin?: number;
+  /** Trailing P/E at Finnhub's snapshot price. */
   pe?: number;
+  /** P/B on latest quarterly book, at Finnhub's snapshot price. */
   pb?: number;
   debtEquity?: number;
   currentRatio?: number;
-  momentum1M?: number;
-  momentum3M?: number;
+  /** Excess return over the S&P 500 in percentage points, at the snapshot. */
+  relative52W?: number;
+  relative13W?: number;
+  /** Percent below the 52-week high, at the snapshot. */
+  drawdown?: number;
 }
 
 // Industry benchmark statistics
@@ -103,46 +108,49 @@ export interface MetricDistribution {
  * meaningful; consumers must not present benchmarks as authoritative when it
  * is false.
  */
+export type BenchmarkMetric =
+  | 'revenueGrowth'
+  | 'epsGrowth'
+  | 'roe'
+  | 'netMargin'
+  | 'operatingMargin'
+  | 'debtEquity'
+  | 'currentRatio'
+  | 'pe'
+  | 'pb'
+  | 'relative52W'
+  | 'relative13W'
+  | 'drawdown';
+
 export interface IndustryBenchmarks {
   industry: string;
   peerCount: number;
   reliable: boolean;
-  distributions: {
-    revenueGrowth: MetricDistribution | null;
-    epsGrowth: MetricDistribution | null;
-    roe: MetricDistribution | null;
-    netMargin: MetricDistribution | null;
-    operatingMargin: MetricDistribution | null;
-    pe: MetricDistribution | null;
-    pb: MetricDistribution | null;
-    debtEquity: MetricDistribution | null;
-    momentum3M: MetricDistribution | null;
-  };
+  distributions: Record<BenchmarkMetric, MetricDistribution | null>;
+  /**
+   * The company's own value for each metric, exactly as the score used it -
+   * price-dependent ones at the live price. Views display these rather than
+   * re-reading the raw payload, so the number on screen is the number scored.
+   */
+  subject: Partial<Record<BenchmarkMetric, number>>;
 }
+
+/** The five factors, in display order. */
+export type FactorKey = 'growth' | 'quality' | 'valuation' | 'momentum' | 'analyst';
 
 // Enhanced score breakdown with relative context
 export interface ScoreBreakdown {
   growthScore: number; // 0-20
-  profitabilityScore: number; // 0-20
-  valuationScore: number; // 0-20
-  qualityScore: number; // 0-20 (replaces momentum)
+  qualityScore: number; // 0-20, profitability and balance sheet
+  valuationScore: number; // 0-20, at the live price
+  momentumScore: number; // 0-20, at the live price
   analystScore: number; // 0-20
+  /** The share price the price-dependent factors were computed at. */
+  pricedAt: number;
   description: string;
-  details: {
-    growth: string;
-    profitability: string;
-    valuation: string;
-    quality: string; // replaces momentum
-    analyst: string;
-  };
+  details: Record<FactorKey, string>;
   // Contextual explanations for each score
-  tooltips: {
-    growth: string;
-    profitability: string;
-    valuation: string;
-    quality: string; // replaces momentum
-    analyst: string;
-  };
+  tooltips: Record<FactorKey, string>;
   /**
    * Confidence in the headline score, driven by how much real data backed it.
    * 'low' means the number is indicative only - typically too few peers
@@ -155,14 +163,8 @@ export interface ScoreBreakdown {
   peerContext: {
     industry: string;
     peerCount: number;
-    /** null where there was not enough peer data to rank against. */
-    percentileRanks: {
-      growth: number | null; // 0-100
-      profitability: number | null;
-      valuation: number | null;
-      quality: number | null;
-      analyst: number | null;
-    };
+    /** 0-100; null where there was not enough peer data to rank against. */
+    percentileRanks: Record<FactorKey, number | null>;
   };
 }
 
@@ -225,11 +227,22 @@ export interface EarningsSurprise {
 // Finnhub Basic Financials (annual and quarterly metrics)
 export interface FinnhubBasicFinancials {
   metric: {
-    // Valuation metrics
+    // Valuation metrics. The ratios are at Finnhub's snapshot price, which lags;
+    // the score recomputes them at the live price from the per-share figures
+    // below. See lib/metrics.ts.
     peNormalizedAnnual?: number; // P/E ratio
-    pbAnnual?: number; // Price to Book
+    peTTM?: number;
+    pbAnnual?: number; // Price to Book, at the fiscal-year-end price
+    pb?: number; // Price to Book on latest quarterly book
     psAnnual?: number; // Price to Sales
+    psTTM?: number;
     pegAnnual?: number; // PEG ratio
+
+    // Per-share fundamentals, which move quarterly rather than daily.
+    epsTTM?: number;
+    bookValuePerShareQuarterly?: number;
+    bookValuePerShareAnnual?: number;
+    revenuePerShareTTM?: number;
     
     // Profitability metrics
     roaRfy?: number; // Return on Assets (%)
@@ -243,9 +256,12 @@ export interface FinnhubBasicFinancials {
     revenueGrowthQuarterlyYoy?: number; // Quarterly YoY revenue growth (%)
     epsGrowthQuarterlyYoy?: number; // Quarterly YoY EPS growth (%)
     
-    // Financial health
+    // Financial health. Note Finnhub sends no `debtEquityAnnual`; leverage is
+    // `totalDebt/totalEquity*`. See debtToEquity() in lib/metrics.ts.
     currentRatioAnnual?: number; // Current ratio
-    debtEquityAnnual?: number; // Debt to Equity
+    currentRatioQuarterly?: number;
+    'totalDebt/totalEquityAnnual'?: number;
+    'totalDebt/totalEquityQuarterly'?: number;
     quickRatioAnnual?: number; // Quick ratio
     
     // Momentum - real price returns supplied by Finnhub's metric endpoint.

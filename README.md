@@ -14,10 +14,15 @@ Enter a ticker and get a 0–100 score built from five factors of 20 points each
 | Factor | Measures |
 |---|---|
 | **Growth** | Revenue and EPS expansion |
-| **Profitability** | Return on equity, net and operating margin |
-| **Valuation** | P/E and P/B — what you pay per unit of earnings and book |
-| **Quality** | Leverage, liquidity, asset efficiency |
+| **Quality** | Return on equity, margins, leverage and liquidity |
+| **Valuation** | P/E and P/B at today's price — what you pay per unit of earnings and book |
+| **Momentum** | 12- and 3-month return against the S&P 500, and distance from the 52-week high |
 | **Analyst** | Consensus positioning across covering analysts |
+
+Valuation and Momentum are computed at the live share price, so the score moves
+with the stock: roughly half a point on an ordinary day, a few points on a
+sharp one, and more over a sustained trend. Growth, Quality and Analyst describe
+the business and move when it reports.
 
 Alongside it: peer distributions with quartiles, relative strength versus the
 S&P 500 across four windows, a risk profile (beta, realised volatility, return

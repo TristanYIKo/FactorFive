@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     template: '%s | FactorFive',
   },
   description:
-    'Five-factor equity analysis: growth, profitability, valuation, quality and analyst consensus, benchmarked against size-matched industry peers and the broader market.',
+    'Five-factor equity analysis: growth, quality, valuation, momentum and analyst consensus, benchmarked against size-matched industry peers and the broader market.',
   keywords: [
     'stock analysis',
     'factor investing',

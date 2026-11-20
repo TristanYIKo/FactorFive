@@ -124,10 +124,24 @@ function observed(d: Date): string {
 const NYSE_URL = 'https://www.nyse.com/markets/hours-calendars';
 const OCC_URL = 'https://www.optionseducation.org/referencelibrary/expiration-calendar';
 
-/** NYSE market holidays. Computed from the statutory rule for each. */
-function marketHolidays(year: number): MarketEvent[] {
+/**
+ * NYSE full-day closures and early closes for one year, as YYYY-MM-DD.
+ *
+ * The single source for both the calendar's holiday events and the live
+ * market-session check in lib/marketHours.ts, so the two can never disagree
+ * about whether the market is open on a given day.
+ */
+export function nyseSchedule(year: number): {
+  holidays: Array<{ date: string; name: string; rule: string }>;
+  earlyCloses: Array<{ date: string; closeMinutesET: number; rule: string }>;
+} {
   const goodFriday = new Date(easterSunday(year));
   goodFriday.setDate(goodFriday.getDate() - 2);
+
+  // The day after Thanksgiving is a standing 1:00 PM ET early close.
+  const thanksgiving = toLocalDate(nthWeekday(year, 10, 4, 4));
+  thanksgiving.setDate(thanksgiving.getDate() + 1);
+  const blackFriday = toKey(thanksgiving.getFullYear(), thanksgiving.getMonth(), thanksgiving.getDate());
 
   const holidays: Array<{ date: string; name: string; rule: string }> = [
     { date: observed(new Date(year, 0, 1)), name: "New Year's Day", rule: 'January 1, weekend-observed' },
@@ -142,6 +156,16 @@ function marketHolidays(year: number): MarketEvent[] {
     { date: observed(new Date(year, 11, 25)), name: 'Christmas Day', rule: 'December 25, weekend-observed' },
   ];
 
+  return {
+    holidays,
+    earlyCloses: [{ date: blackFriday, closeMinutesET: 13 * 60, rule: 'Day after Thanksgiving' }],
+  };
+}
+
+/** NYSE market holidays. Computed from the statutory rule for each. */
+function marketHolidays(year: number): MarketEvent[] {
+  const { holidays, earlyCloses } = nyseSchedule(year);
+
   const events: MarketEvent[] = holidays.map((h) => ({
     id: `holiday-${h.date}`,
     date: h.date,
@@ -152,20 +176,17 @@ function marketHolidays(year: number): MarketEvent[] {
     source: { kind: 'defined' as const, rule: h.rule, url: NYSE_URL },
   }));
 
-  // The day after Thanksgiving is a standing 1:00 PM ET early close.
-  const thanksgiving = toLocalDate(nthWeekday(year, 10, 4, 4));
-  thanksgiving.setDate(thanksgiving.getDate() + 1);
-  const blackFriday = toKey(thanksgiving.getFullYear(), thanksgiving.getMonth(), thanksgiving.getDate());
-
-  events.push({
-    id: `halfday-${blackFriday}`,
-    date: blackFriday,
-    title: 'Early Close: 1:00 PM ET',
-    description: 'Shortened session the day after Thanksgiving. Volume is typically very light.',
-    category: 'Holiday',
-    impact: 'low',
-    source: { kind: 'defined', rule: 'Day after Thanksgiving', url: NYSE_URL },
-  });
+  for (const early of earlyCloses) {
+    events.push({
+      id: `halfday-${early.date}`,
+      date: early.date,
+      title: 'Early Close: 1:00 PM ET',
+      description: 'Shortened session the day after Thanksgiving. Volume is typically very light.',
+      category: 'Holiday',
+      impact: 'low',
+      source: { kind: 'defined', rule: early.rule, url: NYSE_URL },
+    });
+  }
 
   return events;
 }

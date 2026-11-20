@@ -6,7 +6,8 @@
  * performance lever in the app, so they are chosen deliberately rather than
  * uniformly:
  *
- *   quote        30s   - the only genuinely live value on the page
+ *   quote        15s   - the only genuinely live value on the page; in-process
+ *                        memo only, never Next's Data Cache (see below)
  *   news         15m   - headlines do not need second-level freshness
  *   metric       12h   - fundamentals update quarterly
  *   recommend    12h   - analyst ratings move slowly
@@ -16,6 +17,12 @@
  * The old code passed `cache: 'no-store'` to all of these, so every page view
  * refetched all of it. Fundamentals that change four times a year were being
  * refetched several times a second under load.
+ *
+ * The quote is the one exception that goes back to `no-store`. Next's Data
+ * Cache serves the expired value to the first reader after a TTL lapses, so on
+ * a quiet symbol the "30-second" quote was whatever the previous visitor saw -
+ * a day old in one measured case. A price that is wrong by 8% is worse than
+ * one extra request, and the in-process memo still collapses bursts.
  */
 
 import type {
@@ -28,12 +35,13 @@ import type {
   EarningsSurprise,
 } from '@/types/stock';
 import { upstreamJson, upstreamJsonOptional, UpstreamError } from './upstream';
+import { debtToEquity, currentRatio, snapshotDrawdown } from './metrics';
 
 const BASE = 'https://finnhub.io/api/v1';
 
 /** Cache lifetimes in seconds, keyed by how fast the underlying data actually moves. */
 export const TTL = {
-  quote: 30,
+  quote: 15,
   news: 60 * 15,
   metric: 60 * 60 * 12,
   recommendation: 60 * 60 * 12,
@@ -58,11 +66,17 @@ function cacheKey(path: string, params: Record<string, string>): string {
   return `finnhub:${path}:${new URLSearchParams(params).toString()}`;
 }
 
-function get<T>(path: string, params: Record<string, string>, revalidate: number): Promise<T> {
+function get<T>(
+  path: string,
+  params: Record<string, string>,
+  revalidate: number,
+  extra?: { dataCache?: boolean }
+): Promise<T> {
   return upstreamJson<T>(url(path, params), {
     provider: 'finnhub',
     revalidate,
     key: cacheKey(path, params),
+    ...extra,
   });
 }
 
@@ -105,7 +119,8 @@ function peerMetric(symbol: string, deadlineAt: number) {
 }
 
 export const finnhub = {
-  quote: (symbol: string) => get<FinnhubQuote>('/quote', { symbol }, TTL.quote),
+  quote: (symbol: string) =>
+    get<FinnhubQuote>('/quote', { symbol }, TTL.quote, { dataCache: false }),
 
   profile: (symbol: string) => get<FinnhubProfile>('/stock/profile2', { symbol }, TTL.profile),
 
@@ -244,8 +259,8 @@ function selectSizeCohort(
  * call existed only to populate `momentum1M` and `momentum3M`, and it set both
  * to `quote.dp`, which is today's percentage change. That is not one-month or
  * three-month momentum, and storing the same number under two names made the
- * benchmark look richer than it was. The quote call is gone; momentum now
- * comes from the metric payload, which carries real 1M/3M price returns.
+ * benchmark look richer than it was. The quote call is gone; momentum comes
+ * from the metric payload, which carries real relative-strength series.
  *
  * With a 12h TTL these are near-free after the first request for an industry.
  *
@@ -305,15 +320,17 @@ export async function fetchPeerMetrics(
         roa: m.roaRfy,
         netMargin: m.netProfitMarginAnnual,
         operatingMargin: m.operatingMarginAnnual,
-        pe: m.peNormalizedAnnual,
-        pb: m.pbAnnual,
-        debtEquity: m.debtEquityAnnual,
-        currentRatio: m.currentRatioAnnual,
-        // Real price momentum from the metric payload rather than a duplicated
-        // daily change. Finnhub has no exact 1-month field, so month-to-date is
-        // the closest honest proxy; 13-week is a true 3-month return.
-        momentum1M: m.monthToDatePriceReturnDaily,
-        momentum3M: m['13WeekPriceReturnDaily'],
+        // Peers are valued and trended at Finnhub's snapshot price. Pricing them
+        // live would take a quote per peer - eight more requests per cold page,
+        // against a budget a cold page already spends fifteen of. The subject
+        // is priced live; see lib/metrics.ts and docs/ARCHITECTURE.md.
+        pe: m.peTTM,
+        pb: m.pb,
+        debtEquity: debtToEquity(m),
+        currentRatio: currentRatio(m),
+        relative52W: m['priceRelativeToS&P50052Week'],
+        relative13W: m['priceRelativeToS&P50013Week'],
+        drawdown: snapshotDrawdown(m),
       };
       return peer;
     })
