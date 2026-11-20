@@ -24,7 +24,8 @@ import { calculateIntelligentStockScore } from '@/lib/scoring';
 import { analyzeNewsSentiment } from '@/lib/sentiment';
 import { finnhub, fetchPeerMetrics } from '@/lib/finnhub';
 import { upstreamJsonOptional } from '@/lib/upstream';
-import { buildMarketContext } from '@/lib/marketContext';
+import { buildMarketContext, fetchMarketRegime } from '@/lib/marketContext';
+import { liveMetrics } from '@/lib/metrics';
 
 /** Ticker symbols are letters, digits, dot, dash. Reject anything else. */
 export const SYMBOL_PATTERN = /^[A-Z0-9.\-]{1,12}$/;
@@ -99,8 +100,8 @@ async function fetchCompanyNews(
  * Fetch, score and assemble everything for one symbol.
  *
  * Two hops: seven symbol-only calls in parallel, then the work that depended
- * on them (peer cohort needs the market cap, news needs the company name,
- * market context needs the metric payload).
+ * on them (peer cohort needs the market cap, news needs the company name),
+ * alongside the S&P 500 proxy, whose move today the live metrics net out.
  */
 export async function getStockData(rawSymbol: string): Promise<StockResult> {
   const symbol = rawSymbol?.trim().toUpperCase();
@@ -159,11 +160,17 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
     const subjectMarketCap =
       metric.data?.metric?.marketCapitalization ?? profile.marketCapitalization;
 
-    const [peerResult, companyNews, marketContext] = await Promise.all([
+    const [peerResult, companyNews, regime] = await Promise.all([
       fetchPeerMetrics(symbol, peerList, subjectMarketCap),
       fetchCompanyNews(profile.name),
-      buildMarketContext(quote, metric.data),
+      fetchMarketRegime(),
     ]);
+
+    // Every price-dependent figure, recomputed at the live price. The score
+    // and the market-context panel both read from this one object, so they
+    // cannot disagree about what the stock is worth or how it has trended.
+    const live = liveMetrics(quote, metric.data?.metric, regime.dayChangePct);
+    const marketContext = buildMarketContext(quote, metric.data, regime, live);
 
     const { articles: newsAPIArticles, ok: newsApiOk } = companyNews;
 
@@ -172,11 +179,11 @@ export async function getStockData(rawSymbol: string): Promise<StockResult> {
 
     const scored = calculateIntelligentStockScore(
       symbol,
-      quote,
       metric.data,
       recommendations.data,
       peerResult,
-      profile.finnhubIndustry || 'Unknown'
+      profile.finnhubIndustry || 'Unknown',
+      live
     );
 
     // Drop financials.series - 233KB of historical arrays no view reads.

@@ -155,6 +155,9 @@ export const SANE_RANGES = {
   ratio: [0, 150] as [number, number],
   leverage: [0, 10] as [number, number],
   liquidity: [0, 10] as [number, number],
+  /** Excess return over the S&P 500, percentage points. */
+  relativePct: [-100, 200] as [number, number],
+  drawdownPct: [0, 100] as [number, number],
 } as const;
 
 export function clampSane(value: number, range: [number, number]): number {
@@ -164,28 +167,45 @@ export function clampSane(value: number, range: [number, number]): number {
 /**
  * Score a value against fixed thresholds, returning a 0-1 fraction.
  * `thresholds` are ascending boundaries [poor, fair, good, excellent] on the
- * raw value; set `lowerIsBetter` for metrics like P/E where small wins.
+ * raw value; set `lowerIsBetter` for metrics like P/E where small wins, in
+ * which case the same ascending boundaries read [excellent ... poor].
+ *
+ * The curve is piecewise LINEAR between the boundaries. It used to be a
+ * staircase - every value between "fair" and "good" got exactly 0.55 - which
+ * made 40% of every metric's score blind to anything short of a boundary
+ * crossing: a P/E drifting from 19 to 27 scored identically, then a move from
+ * 27.9 to 28.1 dropped it a full step. That is a large part of why the
+ * headline score sat frozen for months and then jumped.
+ *
+ * The anchors sit halfway between the old step values, so each band's AVERAGE
+ * is unchanged (fair-to-good still averages 0.55) and scores do not drift up
+ * or down as a whole; values now simply move continuously through the band.
  */
+const ANCHORS = [0.12, 0.22, 0.435, 0.665, 0.89, 1.0] as const;
+
 export function absoluteFraction(
   value: number,
   thresholds: [number, number, number, number],
   lowerIsBetter = false
 ): number {
-  const [poor, fair, good, excellent] = thresholds;
-
   if (lowerIsBetter) {
-    if (value <= poor) return 1.0;
-    if (value <= fair) return 0.78;
-    if (value <= good) return 0.55;
-    if (value <= excellent) return 0.32;
-    return 0.12;
+    // Mirror onto a higher-is-better scale.
+    const [a, b, c, d] = thresholds;
+    return absoluteFraction(-value, [-d, -c, -b, -a], false);
   }
 
-  if (value >= excellent) return 1.0;
-  if (value >= good) return 0.78;
-  if (value >= fair) return 0.55;
-  if (value >= poor) return 0.32;
-  return 0.12;
+  const [poor, fair, good, excellent] = thresholds;
+  // One band-width beyond each end, the curve flattens into its floor and cap.
+  const xs = [poor - (fair - poor), poor, fair, good, excellent, excellent + (excellent - good)];
+
+  if (value <= xs[0]) return ANCHORS[0];
+  for (let i = 1; i < xs.length; i++) {
+    if (value <= xs[i]) {
+      const t = (value - xs[i - 1]) / (xs[i] - xs[i - 1]);
+      return ANCHORS[i - 1] + t * (ANCHORS[i] - ANCHORS[i - 1]);
+    }
+  }
+  return ANCHORS[ANCHORS.length - 1];
 }
 
 /** Summary of a peer distribution, for display and for scoring. */

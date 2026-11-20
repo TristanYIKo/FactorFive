@@ -25,6 +25,7 @@
 
 import type { FinnhubBasicFinancials, FinnhubQuote } from '@/types/stock';
 import { finnhub } from './finnhub';
+import type { LiveMetrics } from './metrics';
 
 /** Ticker used as the S&P 500 proxy for regime detection. */
 const MARKET_PROXY = 'SPY';
@@ -39,6 +40,11 @@ export interface MarketRegime {
   volatility?: number;
   /** How far the index sits below its 52-week high, % (0 = at the high). */
   drawdownFromHigh?: number;
+  /**
+   * The index's move today, %. Nets the market's move out of a stock's
+   * live relative strength - see liveMetrics() in lib/metrics.ts.
+   */
+  dayChangePct?: number;
   /** Plain-language characterisation of the current tape. */
   label: string;
   description: string;
@@ -105,10 +111,13 @@ export async function fetchMarketRegime(): Promise<MarketRegime> {
   ]);
 
   const m = metricRes.data?.metric;
+  const dayChangePct =
+    quote && quote.c > 0 && Number.isFinite(quote.dp) ? quote.dp : undefined;
 
   if (!metricRes.ok || !m) {
     return {
       proxy: MARKET_PROXY,
+      dayChangePct,
       label: 'Unknown',
       description: 'Broad-market data was unavailable, so results are not market-adjusted.',
     };
@@ -127,7 +136,16 @@ export async function fetchMarketRegime(): Promise<MarketRegime> {
     level && high && high > 0 ? Math.max(0, ((high - level) / high) * 100) : undefined;
 
   const { label, description } = characteriseRegime(return52W, return13W, volatility);
-  return { proxy: MARKET_PROXY, return52W, return13W, volatility, drawdownFromHigh, label, description };
+  return {
+    proxy: MARKET_PROXY,
+    return52W,
+    return13W,
+    volatility,
+    drawdownFromHigh,
+    dayChangePct,
+    label,
+    description,
+  };
 }
 
 function characteriseRegime(
@@ -171,16 +189,17 @@ function characteriseRegime(
   };
 }
 
-/** Excess return versus the S&P 500 across every window Finnhub supplies. */
-export function extractRelativeStrength(financials: FinnhubBasicFinancials | null): RelativeStrength[] {
-  const m = financials?.metric;
-  if (!m) return [];
-
+/**
+ * Excess return versus the S&P 500 across every window Finnhub supplies,
+ * carried forward to the live price so these match what the Momentum factor
+ * scored rather than Finnhub's lagging snapshot.
+ */
+export function extractRelativeStrength(live: LiveMetrics): RelativeStrength[] {
   const windows: Array<{ window: RelativeStrength['window']; value?: number }> = [
-    { window: '4W', value: m['priceRelativeToS&P5004Week'] },
-    { window: '13W', value: m['priceRelativeToS&P50013Week'] },
-    { window: '26W', value: m['priceRelativeToS&P50026Week'] },
-    { window: '52W', value: m['priceRelativeToS&P50052Week'] },
+    { window: '4W', value: live.relative4W },
+    { window: '13W', value: live.relative13W },
+    { window: '26W', value: live.relative26W },
+    { window: '52W', value: live.relative52W },
   ];
 
   return windows
@@ -193,23 +212,31 @@ export function extractRelativeStrength(financials: FinnhubBasicFinancials | nul
 /** Volatility, beta, drawdown and return-per-unit-risk. */
 export function buildRiskProfile(
   quote: FinnhubQuote,
-  financials: FinnhubBasicFinancials | null
+  financials: FinnhubBasicFinancials | null,
+  live: LiveMetrics
 ): RiskProfile {
   const m = financials?.metric;
   const beta = m?.beta;
   const volatility = m?.['3MonthADReturnStd'];
-  const return52W = m?.['52WeekPriceReturnDaily'];
-  const high = m?.['52WeekHigh'];
-  const low = m?.['52WeekLow'];
+  const snapshotReturn52W = m?.['52WeekPriceReturnDaily'];
   const price = quote?.c;
+  // Finnhub's high and low lag by a day or more; today's own range belongs in them.
+  const high = Math.max(m?.['52WeekHigh'] ?? 0, quote?.h > 0 ? quote.h : 0, price ?? 0) || undefined;
+  const low52 = m?.['52WeekLow'];
+  const low = low52 && price ? Math.min(low52, price, quote.l > 0 ? quote.l : Infinity) : undefined;
+
+  // Twelve-month return carried from the snapshot to the live price.
+  const return52W =
+    snapshotReturn52W !== undefined && live.snapshotPrice
+      ? ((1 + snapshotReturn52W / 100) * (live.price / live.snapshotPrice) - 1) * 100
+      : snapshotReturn52W;
 
   const returnPerUnitRisk =
     return52W !== undefined && volatility && volatility > 0
       ? return52W / volatility
       : undefined;
 
-  const drawdownFromHigh =
-    price && high && high > 0 ? Math.max(0, ((high - price) / high) * 100) : undefined;
+  const drawdownFromHigh = live.drawdown;
 
   const rangePosition =
     price && high && low && high > low
@@ -351,14 +378,18 @@ export function buildInsights(
   return insights;
 }
 
-/** Assemble the full context block. One extra cached upstream call. */
-export async function buildMarketContext(
+/**
+ * Assemble the full context block from the regime (fetched separately, since
+ * the live metrics need the index's move first) and the live metrics.
+ */
+export function buildMarketContext(
   quote: FinnhubQuote,
-  financials: FinnhubBasicFinancials | null
-): Promise<MarketContext> {
-  const regime = await fetchMarketRegime();
-  const relativeStrength = extractRelativeStrength(financials);
-  const risk = buildRiskProfile(quote, financials);
+  financials: FinnhubBasicFinancials | null,
+  regime: MarketRegime,
+  live: LiveMetrics
+): MarketContext {
+  const relativeStrength = extractRelativeStrength(live);
+  const risk = buildRiskProfile(quote, financials, live);
   const scenarios = buildScenarios(quote, financials);
   const insights = buildInsights(regime, relativeStrength, risk, financials);
 

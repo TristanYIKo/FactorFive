@@ -35,6 +35,7 @@ import type {
   EarningsSurprise,
 } from '@/types/stock';
 import { upstreamJson, upstreamJsonOptional, UpstreamError } from './upstream';
+import { debtToEquity, currentRatio, snapshotDrawdown } from './metrics';
 
 const BASE = 'https://finnhub.io/api/v1';
 
@@ -258,8 +259,8 @@ function selectSizeCohort(
  * call existed only to populate `momentum1M` and `momentum3M`, and it set both
  * to `quote.dp`, which is today's percentage change. That is not one-month or
  * three-month momentum, and storing the same number under two names made the
- * benchmark look richer than it was. The quote call is gone; momentum now
- * comes from the metric payload, which carries real 1M/3M price returns.
+ * benchmark look richer than it was. The quote call is gone; momentum comes
+ * from the metric payload, which carries real relative-strength series.
  *
  * With a 12h TTL these are near-free after the first request for an industry.
  *
@@ -319,15 +320,17 @@ export async function fetchPeerMetrics(
         roa: m.roaRfy,
         netMargin: m.netProfitMarginAnnual,
         operatingMargin: m.operatingMarginAnnual,
-        pe: m.peNormalizedAnnual,
-        pb: m.pbAnnual,
-        debtEquity: m.debtEquityAnnual,
-        currentRatio: m.currentRatioAnnual,
-        // Real price momentum from the metric payload rather than a duplicated
-        // daily change. Finnhub has no exact 1-month field, so month-to-date is
-        // the closest honest proxy; 13-week is a true 3-month return.
-        momentum1M: m.monthToDatePriceReturnDaily,
-        momentum3M: m['13WeekPriceReturnDaily'],
+        // Peers are valued and trended at Finnhub's snapshot price. Pricing them
+        // live would take a quote per peer - eight more requests per cold page,
+        // against a budget a cold page already spends fifteen of. The subject
+        // is priced live; see lib/metrics.ts and docs/ARCHITECTURE.md.
+        pe: m.peTTM,
+        pb: m.pb,
+        debtEquity: debtToEquity(m),
+        currentRatio: currentRatio(m),
+        relative52W: m['priceRelativeToS&P50052Week'],
+        relative13W: m['priceRelativeToS&P50013Week'],
+        drawdown: snapshotDrawdown(m),
       };
       return peer;
     })

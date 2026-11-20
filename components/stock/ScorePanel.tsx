@@ -7,17 +7,17 @@
  * rebuild fixed was precisely a confident number with nothing underneath it.
  */
 
-import type { ScoreBreakdown, DataQuality } from '@/types/stock';
+import type { ScoreBreakdown, DataQuality, FactorKey } from '@/types/stock';
 import { Card, Badge, SectionHeading } from '@/components/ui/Primitives';
 import { ScoreGauge, FactorBar } from '@/components/ui/Charts';
 
-const FACTORS = [
+const FACTORS: ReadonlyArray<{ key: FactorKey; label: string; colour: string }> = [
   { key: 'growth', label: 'Growth', colour: 'var(--factor-growth)' },
-  { key: 'profitability', label: 'Profitability', colour: 'var(--factor-profitability)' },
-  { key: 'valuation', label: 'Valuation', colour: 'var(--factor-valuation)' },
   { key: 'quality', label: 'Quality', colour: 'var(--factor-quality)' },
+  { key: 'valuation', label: 'Valuation', colour: 'var(--factor-valuation)' },
+  { key: 'momentum', label: 'Momentum', colour: 'var(--factor-momentum)' },
   { key: 'analyst', label: 'Analyst', colour: 'var(--factor-analyst)' },
-] as const;
+];
 
 function verdict(score: number): { text: string; tone: 'positive' | 'warning' | 'negative' } {
   if (score >= 75) return { text: 'Strong', tone: 'positive' };
@@ -45,11 +45,11 @@ export function ScorePanel({
   const v = verdict(score);
   const conf = CONFIDENCE_COPY[breakdown.confidence];
 
-  const scores: Record<string, number> = {
+  const scores: Record<FactorKey, number> = {
     growth: breakdown.growthScore,
-    profitability: breakdown.profitabilityScore,
-    valuation: breakdown.valuationScore,
     quality: breakdown.qualityScore,
+    valuation: breakdown.valuationScore,
+    momentum: breakdown.momentumScore,
     analyst: breakdown.analystScore,
   };
 
@@ -74,6 +74,11 @@ export function ScorePanel({
               {dataQuality.peersResolved > 0
                 ? `${dataQuality.peersResolved} peers · ${dataQuality.peerCohort}`
                 : 'No peer comparison available'}
+            </p>
+          )}
+          {breakdown.pricedAt > 0 && (
+            <p className="tabular mt-0.5 text-center text-[11px]" style={{ color: 'var(--text-tertiary)' }}>
+              Priced at ${breakdown.pricedAt.toFixed(2)}
             </p>
           )}
         </div>

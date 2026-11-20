@@ -36,7 +36,7 @@ export async function generateMetadata({
   const upper = decodeURIComponent(symbol).toUpperCase();
   return {
     title: `${upper} analysis`,
-    description: `Five-factor analysis of ${upper}: growth, profitability, valuation, quality and analyst consensus, benchmarked against size-matched industry peers.`,
+    description: `Five-factor analysis of ${upper}: growth, quality, valuation, momentum and analyst consensus, benchmarked against size-matched industry peers.`,
   };
 }
 

@@ -59,7 +59,7 @@
 
   /* --- the five factors, each with a stable identity ------------------- */
   --factor-growth: #2563eb;
-  --factor-profitability: #059669;
+  --factor-momentum: #0891b2;
   --factor-valuation: #d97706;
   --factor-quality: #7c3aed;
   --factor-analyst: #db2777;
@@ -146,7 +146,7 @@
     --neutral-soft: rgba(139, 146, 163, 0.12);
 
     --factor-growth: #5b9dff;
-    --factor-profitability: #2ecc8f;
+    --factor-momentum: #22d3ee;
     --factor-valuation: #f0b34a;
     --factor-quality: #a78bfa;
     --factor-analyst: #f472b6;
@@ -189,7 +189,7 @@
   --neutral-soft: rgba(139, 146, 163, 0.12);
 
   --factor-growth: #5b9dff;
-  --factor-profitability: #2ecc8f;
+  --factor-momentum: #22d3ee;
   --factor-valuation: #f0b34a;
   --factor-quality: #a78bfa;
   --factor-analyst: #f472b6;

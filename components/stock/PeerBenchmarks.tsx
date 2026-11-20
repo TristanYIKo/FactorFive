@@ -14,6 +14,8 @@ import { DistributionStrip } from '@/components/ui/Charts';
 
 const pctFmt = (v: number) => `${v.toFixed(1)}%`;
 const numFmt = (v: number) => v.toFixed(1);
+/** Percentage points, signed, since the reference is the index. */
+const ptsFmt = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)} pts`;
 
 export function PeerBenchmarks({
   benchmarks,
@@ -26,18 +28,24 @@ export function PeerBenchmarks({
 }) {
   if (!benchmarks) return null;
 
-  const m = financials?.metric;
   const d = benchmarks.distributions;
+  // The company's values exactly as the score used them: valuation and trend
+  // at today's price, everything else from the latest reported figures.
+  const s = benchmarks.subject ?? {};
 
   const rows = [
-    { label: 'Revenue growth', dist: d.revenueGrowth, subject: m?.revenueGrowthQuarterlyYoy ?? m?.revenueGrowthAnnual, fmt: pctFmt },
-    { label: 'EPS growth', dist: d.epsGrowth, subject: m?.epsGrowthQuarterlyYoy ?? m?.epsGrowthAnnual, fmt: pctFmt },
-    { label: 'Return on equity', dist: d.roe, subject: m?.roeRfy, fmt: pctFmt },
-    { label: 'Net margin', dist: d.netMargin, subject: m?.netProfitMarginAnnual, fmt: pctFmt },
-    { label: 'Operating margin', dist: d.operatingMargin, subject: m?.operatingMarginAnnual, fmt: pctFmt },
-    { label: 'P/E ratio', dist: d.pe, subject: m?.peNormalizedAnnual, fmt: numFmt },
-    { label: 'P/B ratio', dist: d.pb, subject: m?.pbAnnual, fmt: numFmt },
-    { label: 'Debt / equity', dist: d.debtEquity, subject: m?.debtEquityAnnual, fmt: numFmt },
+    { label: 'Revenue growth', dist: d.revenueGrowth, subject: s.revenueGrowth, fmt: pctFmt },
+    { label: 'EPS growth', dist: d.epsGrowth, subject: s.epsGrowth, fmt: pctFmt },
+    { label: 'Return on equity', dist: d.roe, subject: s.roe, fmt: pctFmt },
+    { label: 'Operating margin', dist: d.operatingMargin, subject: s.operatingMargin, fmt: pctFmt },
+    { label: 'Net margin', dist: d.netMargin, subject: s.netMargin, fmt: pctFmt },
+    { label: 'Debt / equity', dist: d.debtEquity, subject: s.debtEquity, fmt: numFmt },
+    { label: 'Current ratio', dist: d.currentRatio, subject: s.currentRatio, fmt: numFmt },
+    { label: 'P/E (trailing, at today’s price)', dist: d.pe, subject: s.pe, fmt: numFmt },
+    { label: 'P/B (at today’s price)', dist: d.pb, subject: s.pb, fmt: numFmt },
+    { label: '12-month return vs S&P 500', dist: d.relative52W, subject: s.relative52W, fmt: ptsFmt },
+    { label: '3-month return vs S&P 500', dist: d.relative13W, subject: s.relative13W, fmt: ptsFmt },
+    { label: 'Below 52-week high', dist: d.drawdown, subject: s.drawdown, fmt: pctFmt },
   ].filter((r) => r.dist !== null);
 
   return (

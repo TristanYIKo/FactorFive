@@ -117,7 +117,7 @@ collectively exceed 60/min, move both to Redis:
 it only ever adopts `remaining` downward, so budget spent by another instance
 is picked up automatically.
 
-## Two bugs worth remembering
+## Three bugs worth remembering
 
 **`Number(null)` is `0`, not `NaN`.** Finnhub's premium endpoints answer a
 free-tier key with a bare 403 carrying no rate-limit headers at all. Reading
@@ -126,6 +126,15 @@ concluded it had no budget and clamped shut, and every peer lookup then timed
 out waiting for a window that was never exhausted. One request took **103
 seconds** on a completely fresh quota. `numericHeader()` exists solely to make
 this unrepresentable.
+
+**A field that does not exist reads as missing data.** The Quality factor
+read `debtEquityAnnual`, which Finnhub never sends; it was absent from all 64
+payloads checked. Leverage therefore scored as "no data" (neutral half marks)
+for every company ever analysed, and the UI printed "Debt/equity n/a" without
+anyone noticing it was always n/a. The real fields are `totalDebt/totalEquity*`,
+read through `debtToEquity()` in `lib/metrics.ts`, which also maps negative
+equity to maximum leverage rather than letting a negative ratio score as best
+in class.
 
 **Rate-limit headers are stale on arrival.** They describe the provider's state
 when *it* handled that request, which says nothing about the other requests you
@@ -136,8 +145,57 @@ the header when it reports *less* budget than local accounting.
 
 ## Scoring
 
-`lib/scoring.ts` produces five factors of 20 points each. Two properties matter
-more than the formulas.
+`lib/scoring.ts` produces five factors of 20 points each: Growth, Quality,
+Valuation, Momentum and Analyst. Quality absorbed the former Profitability
+factor; the two overlapped (ROE and ROA are both returns on capital), so being
+profitable was counted twice at 40% of the score, and Momentum took the freed
+slot. A few properties matter more than the formulas.
+
+### Priced live
+
+Until 2026-11-20 nothing in the score depended on today's price. Replaying
+eight recorded symbols through the old engine with a simulated 6% drop changed
+none of their scores. Worse, the valuation ratios it read were Finnhub's own,
+priced in the past: NVDA's P/E implied a price of $148 and its P/B $186,
+against a live $137.
+
+`lib/metrics.ts` now recomputes every price-dependent figure at the live
+price:
+
+- **P/E** is the live price over trailing-twelve-month EPS, and **P/B** the live
+  price over latest-quarter book value per share. The per-share figures move
+  quarterly, so this is exact rather than an estimate.
+- **Relative strength** is carried forward from Finnhub's snapshot. The
+  snapshot price is recovered from Finnhub's own ratios (`peTTM × epsTTM` is
+  the price it used), and the stock's move since then is applied. Finnhub's
+  relative strength is a *difference* of returns in percentage points, not a
+  ratio: across eight symbols on one snapshot the implied S&P return agreed to
+  the hundredth under subtraction and scattered by six points under division.
+- **Today's index move** (SPY's quote) is netted out, so a market-wide day
+  leaves momentum roughly unchanged. Earlier sessions between the snapshot and
+  today are not netted out, because index history is a premium endpoint; on the
+  sample that residual was about one point.
+
+Measured on the recorded sample, a ±2% day moves a score by about 0.4 points on
+average, ±6% by up to 3, and ±20% by up to 9. Valuation and Momentum pull in
+opposite directions (a falling stock is cheaper but trending worse), and a
+factor already near its floor or cap has little room left, so the response is
+largest for stocks mid-range on both.
+
+**Peers are not priced live.** Doing so would take a quote per peer, which
+would cost more than the rest of a cold page. The subject at today's price is
+compared with peers at Finnhub's snapshot, so on a sector-wide move the subject
+reads slightly cheaper and weaker than its peers until the next daily snapshot.
+
+Factor points are kept unrounded and the total is rounded once, then
+apportioned back to whole-number factors by largest remainder. Rounding each
+factor separately swallowed exactly the small moves live pricing produces.
+
+### Smooth thresholds
+
+The absolute half of each metric used to be a staircase: every P/E from 18 to
+28 scored the same, then one tick past 28 dropped a full step. It is now
+piecewise linear, anchored so each band's average is unchanged.
 
 ### Robust statistics
 

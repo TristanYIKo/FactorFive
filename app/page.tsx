@@ -45,12 +45,12 @@ const FACTORS = [
     detail: 'Revenue and EPS expansion, ranked against size-matched peers.',
   },
   {
-    name: 'Profitability',
-    colour: 'var(--factor-profitability)',
+    name: 'Quality',
+    colour: 'var(--factor-quality)',
     points: 20,
     example: 16,
     percentile: 81,
-    detail: 'Return on equity and margin quality relative to the sector.',
+    detail: 'Returns, margins, leverage and liquidity: how profitable the business is and how safely it is financed.',
   },
   {
     name: 'Valuation',
@@ -58,15 +58,15 @@ const FACTORS = [
     points: 20,
     example: 11,
     percentile: 44,
-    detail: 'What you pay per unit of earnings and book value.',
+    detail: 'P/E and P/B at today’s price: what you pay per unit of earnings and book value.',
   },
   {
-    name: 'Quality',
-    colour: 'var(--factor-quality)',
+    name: 'Momentum',
+    colour: 'var(--factor-momentum)',
     points: 20,
-    example: 15,
-    percentile: 74,
-    detail: 'Leverage, liquidity and asset efficiency.',
+    example: 13,
+    percentile: 62,
+    detail: 'Twelve- and three-month return against the S&P 500, and distance from the 52-week high.',
   },
   {
     name: 'Analyst',
@@ -114,8 +114,9 @@ export default function Home() {
               className="mt-5 max-w-[52ch] text-[15.5px] leading-relaxed sm:text-[16px]"
               style={{ color: 'var(--text-secondary)' }}
             >
-              Growth, profitability, valuation, quality and analyst consensus, benchmarked against
-              size-matched industry peers. When the data is thin, it says so.
+              Growth, quality, valuation, momentum and analyst consensus, benchmarked against
+              size-matched industry peers and priced at today’s quote. When the data is thin, it
+              says so.
             </p>
 
             <div className="mt-7 max-w-xl">
